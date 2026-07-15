@@ -147,6 +147,10 @@ details.setup code { background:var(--bg2); padding:1px 6px; border-radius:5px; 
       <select id="f-zona"><option value="">Todas</option></select>
     </div>
     <div class="field">
+      <label>Account_vv</label>
+      <select id="f-account-vv"><option value="">Todas</option></select>
+    </div>
+    <div class="field">
       <label>Account_int</label>
       <select id="f-account-int"><option value="">Todos</option></select>
     </div>
@@ -226,7 +230,7 @@ const FIELD_ALIASES = {
   fecha:   ['fecha'],
   corte:   ['corte'],
   zona:    ['zona'],
-  cuenta:  ['cuenta'],
+  cuenta:  ['cuenta','account_vv','accountvv','account vv'],
   account_int: ['account_int','accountint','account int'],
   pos:     ['pos'],
   modelo:  ['modelo'],
@@ -436,6 +440,12 @@ function poblarFiltros() {
   selRegion.innerHTML = '<option value="">Todas</option>' + regiones.map(rg => `<option value="${rg}">${rg}</option>`).join('');
   if (regiones.includes(prevRegion)) selRegion.value = prevRegion;
 
+  const accountVvs = [...new Set(ventasRaw.map(r => r.cuenta).filter(Boolean))].sort();
+  const selAccountVv = document.getElementById('f-account-vv');
+  const prevAccountVv = selAccountVv.value;
+  selAccountVv.innerHTML = '<option value="">Todas</option>' + accountVvs.map(a => `<option value="${a}">${a}</option>`).join('');
+  if (accountVvs.includes(prevAccountVv)) selAccountVv.value = prevAccountVv;
+
   const accountInts = [...new Set(ventasRaw.map(r => r.account_int).filter(Boolean))].sort();
   const selAccountInt = document.getElementById('f-account-int');
   const prevAccountInt = selAccountInt.value;
@@ -443,7 +453,7 @@ function poblarFiltros() {
   if (accountInts.includes(prevAccountInt)) selAccountInt.value = prevAccountInt;
 }
 
-['f-fecha','f-corte','f-region','f-zona','f-account-int'].forEach(id => {
+['f-fecha','f-corte','f-region','f-zona','f-account-vv','f-account-int'].forEach(id => {
   document.getElementById(id).addEventListener('change', render);
 });
 
@@ -461,12 +471,14 @@ function render() {
   const region = document.getElementById('f-region').value;
   const zona = document.getElementById('f-zona').value;
   const accountInt = document.getElementById('f-account-int').value;
+  const accountVv = document.getElementById('f-account-vv').value;
 
   const filtradas = ventasRaw.filter(r =>
     (!fecha || r.fecha === fecha) &&
     (!corte || r.corte === corte) &&
     (!region || regionDeZona(r.zona) === region) &&
     (!zona || r.zona === zona) &&
+    (!accountVv || r.cuenta === accountVv) &&
     (!accountInt || r.account_int === accountInt)
   );
 
@@ -484,6 +496,7 @@ function render() {
 
   // metas filtradas por los mismos filtros de zona/account_int, cruzadas por zona+account_int
   const metasFiltradas = metasRows.filter(m =>
+    (!region || regionDeZona(m.zona) === region) &&
     (!zona || m.zona === zona) &&
     (!accountInt || m.account_int === accountInt)
   );
@@ -541,7 +554,7 @@ function render() {
       <td class="num">${arPill(totalAr)}</td>
     </tr>`;
 
-  renderDetailTable(fecha, corte, region, zona, accountInt);
+  renderDetailTable(fecha, corte, region, zona, accountVv, accountInt);
   renderCharts(filtradas);
 }
 
@@ -550,7 +563,7 @@ function formatFechaCorta(iso) {
   return `${d}/${m}/${y}`;
 }
 
-function renderDetailTable(fecha, corte, region, zona, accountInt) {
+function renderDetailTable(fecha, corte, region, zona, accountVv, accountInt) {
   const anchor = fecha ? new Date(fecha + 'T00:00:00') : new Date();
   const dias = [];
   for (let i = 0; i < 7; i++) {
@@ -563,6 +576,7 @@ function renderDetailTable(fecha, corte, region, zona, accountInt) {
     (!corte || r.corte === corte) &&
     (!region || regionDeZona(r.zona) === region) &&
     (!zona || r.zona === zona) &&
+    (!accountVv || r.cuenta === accountVv) &&
     (!accountInt || r.account_int === accountInt) &&
     dias.includes(r.fecha)
   );
