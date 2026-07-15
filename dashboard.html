@@ -250,7 +250,9 @@ const FIELD_ALIASES = {
   fecha:   ['fecha'],
   corte:   ['corte'],
   zona:    ['zona'],
-  cuenta:  ['cuenta','account_vv','accountvv','account vv'],
+  region:  ['region'],
+  cuenta:  ['cuenta'],
+  accountVv: ['account_vv','accountvv','account vv'],
   account_int: ['account_int','accountint','account int'],
   pos:     ['pos'],
   modelo:  ['modelo'],
@@ -353,8 +355,10 @@ function parseVentas(table) {
       fecha: String(fechaRaw).slice(0, 10),
       corte: String(cellVal(r, idx.corte)).trim(),
       zona: String(cellVal(r, idx.zona)).trim(),
+      region: String(cellVal(r, idx.region)).trim(),
       cuenta: String(cellVal(r, idx.cuenta)).trim(),
-      account_int: String(cellVal(r, idx.account_int)).trim(),
+      accountVv: String(cellVal(r, idx.accountVv)).trim().toUpperCase(),
+      account_int: String(cellVal(r, idx.account_int)).trim().toUpperCase(),
       pos: String(cellVal(r, idx.pos)).trim(),
       modelo: String(cellVal(r, idx.modelo)).trim(),
       lineal: String(cellVal(r, idx.lineal)).trim(),
@@ -375,7 +379,7 @@ function parseMetas(table) {
     if (!zona) return;
     rows.push({
       zona,
-      account_int: iAccountInt !== -1 ? String(cellVal(r, iAccountInt)).trim() : '',
+      account_int: iAccountInt !== -1 ? String(cellVal(r, iAccountInt)).trim().toUpperCase() : '',
       supervisor: iSup !== -1 ? String(cellVal(r, iSup)).trim() : '',
       tg_day: parseFloat(cellVal(r, iTg)) || 0
     });
@@ -383,14 +387,19 @@ function parseMetas(table) {
   return rows;
 }
 
-function regionDeZona(zona) {
-  const m = zona.match(/^([A-Za-zÀ-ÿ]+)/);
+function regionFallback(zona) {
+  const m = String(zona || '').match(/^([A-Za-zÀ-ÿ]+)/);
   return m ? m[1] : zona;
 }
+let zonaRegionMap = {}; // zona → region, tomado de la columna "region" de Hoja 1 cuando existe
+function regionDeZona(zona) {
+  return zonaRegionMap[zona] || regionFallback(zona);
+}
 
-// comparación tolerante a mayúsculas/acentos/espacios entre pestañas (tg_month/tg_day
-// a veces escriben zona/account_int distinto a Hoja 1)
-function eq(a, b) { return normalize(a) === normalize(b); }
+// comparación tolerante a mayúsculas/acentos/espacios/guiones entre pestañas
+// (zona/pos/account_int a veces se escriben distinto en tg_month/tg_day vs Hoja 1)
+function normLoose(str) { return normalize(str).replace(/[\s_-]+/g, ''); }
+function eq(a, b) { return normLoose(a) === normLoose(b); }
 
 function parseTgMonth(table) {
   const labels = table.cols.map(c => normalize(c.label));
@@ -406,7 +415,7 @@ function parseTgMonth(table) {
     if (!zona || !pos) return;
     rows.push({
       zona,
-      account_int: iAccountInt !== -1 ? String(cellVal(r, iAccountInt)).trim() : '',
+      account_int: iAccountInt !== -1 ? String(cellVal(r, iAccountInt)).trim().toUpperCase() : '',
       pos,
       cv_p: parseFloat(cellVal(r, iCvP)) || 0,
       cv_r: parseFloat(cellVal(r, iCvR)) || 0
@@ -428,6 +437,8 @@ async function cargarTodo(manual) {
       fetchGviz(TG_MONTH_SHEET_NAME)
     ]);
     ventasRaw = parseVentas(tVentas);
+    zonaRegionMap = {};
+    ventasRaw.forEach(r => { if (r.zona && r.region && !zonaRegionMap[r.zona]) zonaRegionMap[r.zona] = r.region; });
     metasRows = parseMetas(tMetas);
     tgMonthRows = parseTgMonth(tTgMonth);
 
@@ -498,7 +509,7 @@ function poblarFiltros() {
   const posOptions = [...new Set(ventasRaw.filter(r =>
     (!zonaActual || r.zona === zonaActual) &&
     (!accountIntActual || r.account_int === accountIntActual) &&
-    (!accountVvActual || r.cuenta === accountVvActual)
+    (!accountVvActual || r.accountVv === accountVvActual)
   ).map(r => r.pos).filter(Boolean))].sort();
   const selPos = document.getElementById('f-pos');
   const prevPos = selPos.value;
@@ -511,7 +522,7 @@ function poblarFiltros() {
   selModelo.innerHTML = '<option value="">Todos</option>' + modelos.map(md => `<option value="${md}">${md}</option>`).join('');
   if (modelos.includes(prevModelo)) selModelo.value = prevModelo;
 
-  const accountVvs = [...new Set(ventasRaw.map(r => r.cuenta).filter(Boolean))].sort();
+  const accountVvs = [...new Set(ventasRaw.map(r => r.accountVv).filter(Boolean))].sort();
   const selAccountVv = document.getElementById('f-account-vv');
   const prevAccountVv = selAccountVv.value;
   selAccountVv.innerHTML = '<option value="">Todas</option>' + accountVvs.map(a => `<option value="${a}">${a}</option>`).join('');
@@ -523,7 +534,6 @@ function poblarFiltros() {
   selAccountInt.innerHTML = '<option value="">Todos</option>' + accountInts.map(a => `<option value="${a}">${a}</option>`).join('');
   if (accountInts.includes(prevAccountInt)) selAccountInt.value = prevAccountInt;
 }
-
 ['f-fecha','f-corte','f-region','f-zona','f-pos','f-modelo','f-account-vv','f-account-int'].forEach(id => {
   document.getElementById(id).addEventListener('change', () => {
     if (id === 'f-region' || id === 'f-zona' || id === 'f-account-int' || id === 'f-account-vv') poblarFiltros();
@@ -555,7 +565,7 @@ function render() {
     (!region || regionDeZona(r.zona) === region) &&
     (!zona || r.zona === zona) &&
     (!pos || r.pos === pos) &&
-    (!accountVv || r.cuenta === accountVv) &&
+    (!accountVv || r.accountVv === accountVv) &&
     (!accountInt || r.account_int === accountInt)
   );
 
@@ -580,8 +590,8 @@ function render() {
   );
   const cvByGrupo = {};
   tgMonthFiltrado.forEach(t => {
-    const gKey = normalize(t.zona) + '||' + normalize(t.account_int);
-    if (!cvByGrupo[gKey]) cvByGrupo[gKey] = { cv_p: 0, cv_r: 0 };
+    const gKey = normLoose(t.zona) + '||' + normLoose(t.account_int);
+    if (!cvByGrupo[gKey]) cvByGrupo[gKey] = { cv_p: 0, cv_r: 0, zona: t.zona, account_int: t.account_int };
     cvByGrupo[gKey].cv_p += t.cv_p;
     cvByGrupo[gKey].cv_r += t.cv_r;
   });
@@ -601,14 +611,27 @@ function render() {
   });
 
   const keysVistas = new Set([...Object.keys(porGrupo), ...Object.keys(metasByKey)]);
+  const keysVistasNorm = new Set([...keysVistas].map(k => { const [z, a] = k.split('||'); return normLoose(z) + '||' + normLoose(a); }));
   let filas = [...keysVistas].map(key => {
     const [zonaKey, accountIntKey] = key.split('||');
     const g = porGrupo[key] || { so: 0, stock: 0 };
     const tg = pos ? null : (metasByKey[key] || 0);
     const ar = pos ? null : (tg > 0 ? (g.so / tg) * 100 : (g.so > 0 ? 100 : 0));
-    const cv = cvByGrupo[normalize(zonaKey) + '||' + normalize(accountIntKey)] || { cv_p: 0, cv_r: 0 };
+    const cv = cvByGrupo[normLoose(zonaKey) + '||' + normLoose(accountIntKey)] || { cv_p: 0, cv_r: 0 };
     return { key, zona: zonaKey, account_int: accountIntKey, label: supByZona[zonaKey] || zonaKey, so: g.so, stock: g.stock, tg, ar, cv_p: cv.cv_p, cv_r: cv.cv_r };
   });
+
+  // si hay filtro de POS, agrega filas puramente de cv_p/cv_r (tg_month) que no
+  // tengan ventas ni meta — sin esto, un POS sin ventas del día desaparece de la
+  // tabla junto con su CV_p/CV_r. tg_month no tiene account_vv, así que este
+  // fallback solo se omite si el usuario filtró por modelo (que tampoco existe ahí)
+  if (pos && !modelo) {
+    Object.keys(cvByGrupo).forEach(gKey => {
+      if (keysVistasNorm.has(gKey)) return;
+      const cv = cvByGrupo[gKey];
+      filas.push({ key: gKey, zona: cv.zona, account_int: cv.account_int, label: cv.zona, so: 0, stock: 0, tg: null, ar: null, cv_p: cv.cv_p, cv_r: cv.cv_r });
+    });
+  }
 
   const sortKeyMap = { label: 'label', so: 'so', stock: 'stock', tg: 'tg', ar: 'ar', cvp: 'cv_p', cvr: 'cv_r' };
   const sk = sortKeyMap[sortState.key] || 'so';
@@ -621,8 +644,8 @@ function render() {
   const posConDatos = new Set(filtradas.filter(r => r.so > 0).map(r => r.pos)).size;
   const posConStock = new Set(filtradas.filter(r => r.stock > 0).map(r => r.pos)).size;
   const posTotal = new Set(tgMonthFiltrado.map(t => t.pos)).size;
-  const totalCvP = filas.reduce((s, f) => s + f.cv_p, 0);
-  const totalCvR = filas.reduce((s, f) => s + f.cv_r, 0);
+  const totalCvP = filas.reduce((s, f) => s + (f.cv_p || 0), 0);
+  const totalCvR = filas.reduce((s, f) => s + (f.cv_r || 0), 0);
 
   document.getElementById('kpi-so').textContent = totalSo.toLocaleString('es-PE');
   document.getElementById('kpi-stock').textContent = totalStock.toLocaleString('es-PE');
@@ -681,7 +704,7 @@ function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, a
     (!zona || r.zona === zona) &&
     (!pos || r.pos === pos) &&
     (!modelo || r.modelo === modelo) &&
-    (!accountVv || r.cuenta === accountVv) &&
+    (!accountVv || r.accountVv === accountVv) &&
     (!accountInt || r.account_int === accountInt) &&
     dias.includes(r.fecha)
   );
