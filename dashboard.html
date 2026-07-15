@@ -209,6 +209,7 @@ details.setup code { background:var(--bg2); padding:1px 6px; border-radius:5px; 
           <tr>
             <th onclick="setSort('label')">Zona</th>
             <th>Account_int</th>
+            <th>Account_vv</th>
             <th class="num" onclick="setSort('so')">SO</th>
             <th class="num" onclick="setSort('stock')">Stock</th>
             <th class="num" onclick="setSort('tg')">tg_day</th>
@@ -392,6 +393,8 @@ function regionFallback(zona) {
   return m ? m[1] : zona;
 }
 let zonaRegionMap = {}; // zona → region, tomado de la columna "region" de Hoja 1 cuando existe
+let accountIntToVv = {}; // account_int → account_vv, derivado de Hoja 1 (tg_month/tg_day no tienen account_vv)
+function accountVvDeAccountInt(ai) { return accountIntToVv[ai] || ''; }
 function regionDeZona(zona) {
   return zonaRegionMap[zona] || regionFallback(zona);
 }
@@ -439,6 +442,8 @@ async function cargarTodo(manual) {
     ventasRaw = parseVentas(tVentas);
     zonaRegionMap = {};
     ventasRaw.forEach(r => { if (r.zona && r.region && !zonaRegionMap[r.zona]) zonaRegionMap[r.zona] = r.region; });
+    accountIntToVv = {};
+    ventasRaw.forEach(r => { if (r.account_int && r.accountVv && !accountIntToVv[r.account_int]) accountIntToVv[r.account_int] = r.accountVv; });
     metasRows = parseMetas(tMetas);
     tgMonthRows = parseTgMonth(tTgMonth);
 
@@ -587,7 +592,8 @@ function render() {
     (!region || eq(regionDeZona(t.zona), region)) &&
     (!zona || eq(t.zona, zona)) &&
     (!pos || eq(t.pos, pos)) &&
-    (!accountInt || eq(t.account_int, accountInt))
+    (!accountInt || eq(t.account_int, accountInt)) &&
+    (!accountVv || eq(accountVvDeAccountInt(t.account_int), accountVv))
   );
   const cvByGrupo = {};
   tgMonthFiltrado.forEach(t => {
@@ -601,7 +607,8 @@ function render() {
   const metasFiltradas = metasRows.filter(m =>
     (!region || regionDeZona(m.zona) === region) &&
     (!zona || m.zona === zona) &&
-    (!accountInt || m.account_int === accountInt)
+    (!accountInt || m.account_int === accountInt) &&
+    (!accountVv || eq(accountVvDeAccountInt(m.account_int), accountVv))
   );
   const metasByKey = {};
   const supByZona = {};
@@ -619,7 +626,7 @@ function render() {
     const tg = pos ? null : (metasByKey[key] || 0);
     const ar = pos ? null : (tg > 0 ? (g.so / tg) * 100 : (g.so > 0 ? 100 : 0));
     const cv = cvByGrupo[normLoose(zonaKey) + '||' + normLoose(accountIntKey)] || { cv_p: 0, cv_r: 0 };
-    return { key, zona: zonaKey, account_int: accountIntKey, label: supByZona[zonaKey] || zonaKey, so: g.so, stock: g.stock, tg, ar, cv_p: cv.cv_p, cv_r: cv.cv_r };
+    return { key, zona: zonaKey, account_int: accountIntKey, accountVv: accountVvDeAccountInt(accountIntKey), label: supByZona[zonaKey] || zonaKey, so: g.so, stock: g.stock, tg, ar, cv_p: cv.cv_p, cv_r: cv.cv_r };
   });
 
   // si hay filtro de POS, agrega filas puramente de cv_p/cv_r (tg_month) que no
@@ -630,7 +637,7 @@ function render() {
     Object.keys(cvByGrupo).forEach(gKey => {
       if (keysVistasNorm.has(gKey)) return;
       const cv = cvByGrupo[gKey];
-      filas.push({ key: gKey, zona: cv.zona, account_int: cv.account_int, label: cv.zona, so: 0, stock: 0, tg: null, ar: null, cv_p: cv.cv_p, cv_r: cv.cv_r });
+      filas.push({ key: gKey, zona: cv.zona, account_int: cv.account_int, accountVv: accountVvDeAccountInt(cv.account_int), label: cv.zona, so: 0, stock: 0, tg: null, ar: null, cv_p: cv.cv_p, cv_r: cv.cv_r });
     });
   }
 
@@ -663,6 +670,7 @@ function render() {
     <tr>
       <td>${f.label}</td>
       <td>${f.account_int}</td>
+      <td>${f.accountVv || '—'}</td>
       <td class="num ${cellClass(f.so)}">${f.so.toLocaleString('es-PE')}</td>
       <td class="num ${cellClass(f.stock)}">${f.stock.toLocaleString('es-PE')}</td>
       <td class="num">${f.tg === null ? '—' : f.tg.toLocaleString('es-PE')}</td>
@@ -672,6 +680,7 @@ function render() {
     </tr>`).join('') + `
     <tr class="total-row">
       <td>Total</td>
+      <td></td>
       <td></td>
       <td class="num">${totalSo.toLocaleString('es-PE')}</td>
       <td class="num">${totalStock.toLocaleString('es-PE')}</td>
@@ -713,7 +722,7 @@ function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, a
   const grupos = {};
   base.forEach(r => {
     const key = r.zona + '||' + r.account_int + '||' + r.pos + '||' + r.modelo;
-    if (!grupos[key]) grupos[key] = { zona: r.zona, account_int: r.account_int, pos: r.pos, modelo: r.modelo, porDia: {} };
+    if (!grupos[key]) grupos[key] = { zona: r.zona, account_int: r.account_int, accountVv: r.accountVv, pos: r.pos, modelo: r.modelo, porDia: {} };
     if (!grupos[key].porDia[r.fecha]) grupos[key].porDia[r.fecha] = { so: 0, stock: 0 };
     grupos[key].porDia[r.fecha].so += r.so;
     grupos[key].porDia[r.fecha].stock += r.stock;
@@ -721,7 +730,7 @@ function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, a
   const filas = Object.values(grupos).sort((a, b) => a.zona.localeCompare(b.zona) || a.pos.localeCompare(b.pos) || a.modelo.localeCompare(b.modelo));
 
   document.getElementById('detail-thead-dates').innerHTML =
-    '<th rowspan="2">Zona</th><th rowspan="2">Account_int</th><th rowspan="2">POS</th><th rowspan="2">Modelo</th>' +
+    '<th rowspan="2">Zona</th><th rowspan="2">Account_int</th><th rowspan="2">Account_vv</th><th rowspan="2">POS</th><th rowspan="2">Modelo</th>' +
     dias.map(d => `<th class="num date-sep" colspan="2">${formatFechaCorta(d)}</th>`).join('');
   document.getElementById('detail-thead-sub').innerHTML =
     dias.map(() => '<th class="num date-sep">SO</th><th class="num">SK</th>').join('');
@@ -731,7 +740,7 @@ function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, a
       const v = f.porDia[d] || { so: 0, stock: 0 };
       return `<td class="num date-sep ${cellClass(v.so)}">${v.so.toLocaleString('es-PE')}</td><td class="num ${cellClass(v.stock)}">${v.stock.toLocaleString('es-PE')}</td>`;
     }).join('');
-    return `<tr><td>${f.zona}</td><td>${f.account_int}</td><td>${f.pos}</td><td>${f.modelo}</td>${cells}</tr>`;
+    return `<tr><td>${f.zona}</td><td>${f.account_int}</td><td>${f.accountVv || '—'}</td><td>${f.pos}</td><td>${f.modelo}</td>${cells}</tr>`;
   }).join('');
 }
 
