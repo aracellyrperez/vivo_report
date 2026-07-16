@@ -202,7 +202,7 @@ details.setup code { background:var(--bg2); padding:1px 6px; border-radius:5px; 
       </div>
     </div>
 
-    <div class="section-label">Ventas por supervisor</div>
+    <div class="section-label">Tabla 1 — Detalle por account</div>
     <div class="table-wrap">
       <table class="sup-table">
         <thead>
@@ -222,7 +222,18 @@ details.setup code { background:var(--bg2); padding:1px 6px; border-radius:5px; 
       </table>
     </div>
 
-    <div class="section-label">Detalle por POS — últimos 7 días</div>
+    <div class="section-label">Tabla 2 — Detalle por POS — últimos 7 días</div>
+    <div class="table-wrap" style="overflow-x:auto">
+      <table class="sup-table">
+        <thead>
+          <tr id="detail-pos-thead-dates"></tr>
+          <tr id="detail-pos-thead-sub"></tr>
+        </thead>
+        <tbody id="detail-pos-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-label">Tabla 3 — Detalle por POS y modelo — últimos 7 días</div>
     <div class="table-wrap" style="overflow-x:auto">
       <table class="sup-table">
         <thead>
@@ -696,6 +707,7 @@ function render() {
       <td class="num">${totalCvR.toLocaleString('es-PE')}</td>
     </tr>`;
 
+  renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv, accountInt);
   renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, accountInt);
   renderCharts(filtradas);
 }
@@ -705,7 +717,7 @@ function formatFechaCorta(iso) {
   return `${d}/${m}/${y}`;
 }
 
-function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, accountInt) {
+function diasVentana(fecha) {
   const anchor = fecha ? new Date(fecha + 'T00:00:00') : new Date();
   const dias = [];
   for (let i = 0; i < 7; i++) {
@@ -713,6 +725,51 @@ function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, a
     d.setDate(d.getDate() - i);
     dias.push(d.toISOString().split('T')[0]);
   }
+  return dias;
+}
+
+// Tabla 2 — igual que la tabla 3 (por POS y modelo) pero sumando todos los
+// modelos de cada POS en una sola fila, sin columna Modelo.
+function renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv, accountInt) {
+  const dias = diasVentana(fecha);
+
+  const base = ventasRaw.filter(r =>
+    (!corte || r.corte === corte) &&
+    (!region || regionDeZona(r.zona) === region) &&
+    (!zona || r.zona === zona) &&
+    (!pos || r.pos === pos) &&
+    (!accountVv || r.accountVv === accountVv) &&
+    (!accountInt || r.account_int === accountInt) &&
+    dias.includes(r.fecha)
+  );
+
+  const grupos = {};
+  base.forEach(r => {
+    const key = r.zona + '||' + r.account_int + '||' + r.pos;
+    if (!grupos[key]) grupos[key] = { zona: r.zona, account_int: r.account_int, accountVv: r.accountVv, pos: r.pos, porDia: {} };
+    if (!grupos[key].porDia[r.fecha]) grupos[key].porDia[r.fecha] = { so: 0, stock: 0 };
+    grupos[key].porDia[r.fecha].so += r.so;
+    grupos[key].porDia[r.fecha].stock += r.stock;
+  });
+  const filas = Object.values(grupos).sort((a, b) => a.zona.localeCompare(b.zona) || a.pos.localeCompare(b.pos));
+
+  document.getElementById('detail-pos-thead-dates').innerHTML =
+    '<th rowspan="2">Zona</th><th rowspan="2">Account_int</th><th rowspan="2">Account_vv</th><th rowspan="2">POS</th>' +
+    dias.map(d => `<th class="num date-sep" colspan="2">${formatFechaCorta(d)}</th>`).join('');
+  document.getElementById('detail-pos-thead-sub').innerHTML =
+    dias.map(() => '<th class="num date-sep">SO</th><th class="num">SK</th>').join('');
+
+  document.getElementById('detail-pos-tbody').innerHTML = filas.map(f => {
+    const cells = dias.map(d => {
+      const v = f.porDia[d] || { so: 0, stock: 0 };
+      return `<td class="num date-sep ${cellClass(v.so)}">${v.so.toLocaleString('es-PE')}</td><td class="num ${cellClass(v.stock)}">${v.stock.toLocaleString('es-PE')}</td>`;
+    }).join('');
+    return `<tr><td>${f.zona}</td><td>${f.account_int}</td><td>${f.accountVv || '—'}</td><td>${f.pos}</td>${cells}</tr>`;
+  }).join('');
+}
+
+function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, accountInt) {
+  const dias = diasVentana(fecha);
 
   const base = ventasRaw.filter(r =>
     (!corte || r.corte === corte) &&
