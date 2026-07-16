@@ -109,6 +109,26 @@ details.setup { background:var(--surface); border:1px solid var(--border); borde
 details.setup summary { cursor:pointer; font-weight:700; color:var(--accent); font-size:12px; }
 details.setup ol { margin:12px 0 0 18px; line-height:1.9; }
 details.setup code { background:var(--bg2); padding:1px 6px; border-radius:5px; font-size:11px; }
+#btn-download-vivo {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  z-index: 200;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 26px;
+  font-family: 'Exo 2', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(30,70,230,.4);
+  transition: transform .15s, box-shadow .15s;
+}
+#btn-download-vivo:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(30,70,230,.5); }
+#btn-download-vivo:active { transform: translateY(0); }
 </style>
 </head>
 <body>
@@ -148,6 +168,10 @@ details.setup code { background:var(--bg2); padding:1px 6px; border-radius:5px; 
       <div class="field">
         <label>Account_vv</label>
         <select id="f-account-vv"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label>Account</label>
+        <select id="f-account"><option value="">Todas</option></select>
       </div>
       <div class="filters-status" id="filters-status"></div>
     </div>
@@ -243,21 +267,11 @@ details.setup code { background:var(--bg2); padding:1px 6px; border-radius:5px; 
         <tbody id="detail-tbody"></tbody>
       </table>
     </div>
-
-    <div class="section-label">Tabla 4 — Descargar datos</div>
-    <div class="table-wrap" style="padding:20px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:240px; font-size:12px; color:var(--muted); line-height:1.6;">
-        Exporta fecha, account_int, account_vv, POS, modelo, SO, SK, CV_p y CV_r — una fila por cada registro cargado.
-        Respeta los filtros de Corte, Región, Zona, POS, Modelo, Account_vv y Account_int de arriba, pero <b>no</b> el de Fecha (descarga todo el histórico disponible).
-      </div>
-      <button class="btn-refresh" style="background:var(--accent); border-color:var(--accent);" onclick="exportarCsv()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
-        Descargar CSV
-      </button>
-    </div>
   </div>
 
 </div>
+
+<button id="btn-download-vivo" onclick="exportarCsv()">VIVO</button>
 
 <script>
 /* ═══════════════════════════════════════════════════════════
@@ -278,6 +292,7 @@ const FIELD_ALIASES = {
   cuenta:  ['cuenta'],
   accountVv: ['account_vv','accountvv','account vv'],
   account_int: ['account_int','accountint','account int'],
+  accountGroup: ['account'], // columna "account" (CLARO/ENTEL/OM), distinta de account_vv/account_int/cuenta
   pos:     ['pos'],
   modelo:  ['modelo'],
   lineal:  ['lineal'],
@@ -383,6 +398,7 @@ function parseVentas(table) {
       cuenta: String(cellVal(r, idx.cuenta)).trim(),
       accountVv: String(cellVal(r, idx.accountVv)).trim().toUpperCase(),
       account_int: String(cellVal(r, idx.account_int)).trim().toUpperCase(),
+      accountGroup: String(cellVal(r, idx.accountGroup)).trim().toUpperCase(),
       pos: String(cellVal(r, idx.pos)).trim(),
       modelo: String(cellVal(r, idx.modelo)).trim(),
       lineal: String(cellVal(r, idx.lineal)).trim(),
@@ -396,6 +412,7 @@ function parseMetas(table) {
   const iZona = labels.findIndex(l => l === 'zone' || l === 'zona');
   const iAccountInt = labels.findIndex(l => l === 'account_int' || l === 'accountint' || l === 'account int');
   const iAccountVv = labels.findIndex(l => l === 'account_vv' || l === 'accountvv' || l === 'account vv');
+  const iAccountGroup = labels.findIndex(l => l === 'account'); // CLARO/ENTEL/OM
   const iSup = labels.findIndex(l => l.startsWith('supervisor')); // opcional, puede no existir todavía
   const iTg = labels.findIndex(l => l.includes('tg'));
   const rows = [];
@@ -406,6 +423,7 @@ function parseMetas(table) {
       zona,
       account_int: iAccountInt !== -1 ? String(cellVal(r, iAccountInt)).trim().toUpperCase() : '',
       accountVv: iAccountVv !== -1 ? String(cellVal(r, iAccountVv)).trim().toUpperCase() : '',
+      accountGroup: iAccountGroup !== -1 ? String(cellVal(r, iAccountGroup)).trim().toUpperCase() : '',
       supervisor: iSup !== -1 ? String(cellVal(r, iSup)).trim() : '',
       tg_day: parseFloat(cellVal(r, iTg)) || 0
     });
@@ -420,6 +438,8 @@ function regionFallback(zona) {
 let zonaRegionMap = {}; // zona → region, tomado de la columna "region" de Hoja 1 cuando existe
 let accountIntToVv = {}; // account_int → account_vv, derivado de Hoja 1 (tg_month/tg_day no tienen account_vv)
 function accountVvDeAccountInt(ai) { return accountIntToVv[ai] || ''; }
+let accountIntToGroup = {}; // account_int → account (CLARO/ENTEL/OM), derivado de Hoja 1 por si tg_month/tg_day no traen la columna
+function accountGroupDeAccountInt(ai) { return accountIntToGroup[ai] || ''; }
 function regionDeZona(zona) {
   return zonaRegionMap[zona] || regionFallback(zona);
 }
@@ -434,6 +454,7 @@ function parseTgMonth(table) {
   const iZona = labels.findIndex(l => l === 'zone' || l === 'zona');
   const iAccountInt = labels.findIndex(l => l === 'account_int' || l === 'accountint' || l === 'account int');
   const iAccountVv = labels.findIndex(l => l === 'account_vv' || l === 'accountvv' || l === 'account vv');
+  const iAccountGroup = labels.findIndex(l => l === 'account'); // CLARO/ENTEL/OM
   // "POS" (código, ej. CL_Telfox) es la columna que cruza con Hoja 1 — "pos_vv" es
   // solo el nombre visual (ej. Telfox) y NO debe usarse para el cruce. Buscamos
   // primero un match exacto de "pos" para no quedarnos con "pos_vv" por error.
@@ -450,6 +471,7 @@ function parseTgMonth(table) {
       zona,
       account_int: iAccountInt !== -1 ? String(cellVal(r, iAccountInt)).trim().toUpperCase() : '',
       accountVv: iAccountVv !== -1 ? String(cellVal(r, iAccountVv)).trim().toUpperCase() : '',
+      accountGroup: iAccountGroup !== -1 ? String(cellVal(r, iAccountGroup)).trim().toUpperCase() : '',
       pos,
       cv_p: parseFloat(cellVal(r, iCvP)) || 0,
       cv_r: parseFloat(cellVal(r, iCvR)) || 0
@@ -475,6 +497,8 @@ async function cargarTodo(manual) {
     ventasRaw.forEach(r => { if (r.zona && r.region && !zonaRegionMap[r.zona]) zonaRegionMap[r.zona] = r.region; });
     accountIntToVv = {};
     ventasRaw.forEach(r => { if (r.account_int && r.accountVv && !accountIntToVv[r.account_int]) accountIntToVv[r.account_int] = r.accountVv; });
+    accountIntToGroup = {};
+    ventasRaw.forEach(r => { if (r.account_int && r.accountGroup && !accountIntToGroup[r.account_int]) accountIntToGroup[r.account_int] = r.accountGroup; });
     metasRows = parseMetas(tMetas);
     tgMonthRows = parseTgMonth(tTgMonth);
 
@@ -542,10 +566,12 @@ function poblarFiltros() {
   const zonaActual = selZona.value;
   const accountIntActual = document.getElementById('f-account-int').value;
   const accountVvActual = document.getElementById('f-account-vv').value;
+  const accountActual = document.getElementById('f-account').value;
   const posOptions = [...new Set(ventasRaw.filter(r =>
     (!zonaActual || r.zona === zonaActual) &&
     (!accountIntActual || r.account_int === accountIntActual) &&
-    (!accountVvActual || r.accountVv === accountVvActual)
+    (!accountVvActual || r.accountVv === accountVvActual) &&
+    (!accountActual || r.accountGroup === accountActual)
   ).map(r => r.pos).filter(Boolean))].sort();
   const selPos = document.getElementById('f-pos');
   const prevPos = selPos.value;
@@ -569,10 +595,16 @@ function poblarFiltros() {
   const prevAccountInt = selAccountInt.value;
   selAccountInt.innerHTML = '<option value="">Todos</option>' + accountInts.map(a => `<option value="${a}">${a}</option>`).join('');
   if (accountInts.includes(prevAccountInt)) selAccountInt.value = prevAccountInt;
+
+  const accounts = [...new Set(ventasRaw.map(r => r.accountGroup).filter(Boolean))].sort();
+  const selAccount = document.getElementById('f-account');
+  const prevAccount = selAccount.value;
+  selAccount.innerHTML = '<option value="">Todas</option>' + accounts.map(a => `<option value="${a}">${a}</option>`).join('');
+  if (accounts.includes(prevAccount)) selAccount.value = prevAccount;
 }
-['f-fecha','f-corte','f-region','f-zona','f-pos','f-modelo','f-account-vv','f-account-int'].forEach(id => {
+['f-fecha','f-corte','f-region','f-zona','f-pos','f-modelo','f-account-vv','f-account-int','f-account'].forEach(id => {
   document.getElementById(id).addEventListener('change', () => {
-    if (id === 'f-region' || id === 'f-zona' || id === 'f-account-int' || id === 'f-account-vv') poblarFiltros();
+    if (id === 'f-region' || id === 'f-zona' || id === 'f-account-int' || id === 'f-account-vv' || id === 'f-account') poblarFiltros();
     render();
   });
 });
@@ -592,6 +624,7 @@ function render() {
   const zona = document.getElementById('f-zona').value;
   const accountInt = document.getElementById('f-account-int').value;
   const accountVv = document.getElementById('f-account-vv').value;
+  const account = document.getElementById('f-account').value;
   const pos = document.getElementById('f-pos').value;
   const modelo = document.getElementById('f-modelo').value;
 
@@ -603,7 +636,8 @@ function render() {
     (!pos || r.pos === pos) &&
     (!modelo || r.modelo === modelo) &&
     (!accountVv || r.accountVv === accountVv) &&
-    (!accountInt || r.account_int === accountInt)
+    (!accountInt || r.account_int === accountInt) &&
+    (!account || r.accountGroup === account)
   );
 
   document.getElementById('filters-status').innerHTML =
@@ -624,7 +658,8 @@ function render() {
     (!zona || eq(t.zona, zona)) &&
     (!pos || eq(t.pos, pos)) &&
     (!accountInt || eq(t.account_int, accountInt)) &&
-    (!accountVv || eq(t.accountVv, accountVv))
+    (!accountVv || eq(t.accountVv, accountVv)) &&
+    (!account || eq(t.accountGroup || accountGroupDeAccountInt(t.account_int), account))
   );
   const cvByGrupo = {};
   tgMonthFiltrado.forEach(t => {
@@ -639,7 +674,8 @@ function render() {
     (!region || regionDeZona(m.zona) === region) &&
     (!zona || m.zona === zona) &&
     (!accountInt || m.account_int === accountInt) &&
-    (!accountVv || eq(m.accountVv, accountVv))
+    (!accountVv || eq(m.accountVv, accountVv)) &&
+    (!account || eq(m.accountGroup || accountGroupDeAccountInt(m.account_int), account))
   );
   const metasByKey = {};
   const supByZona = {};
@@ -719,8 +755,8 @@ function render() {
       <td class="num">${totalCvR.toLocaleString('es-PE')}</td>
     </tr>`;
 
-  renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv, accountInt);
-  renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, accountInt);
+  renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv, accountInt, account);
+  renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, accountInt, account);
   renderCharts(filtradas);
 }
 
@@ -742,7 +778,7 @@ function diasVentana(fecha) {
 
 // Tabla 2 — igual que la tabla 3 (por POS y modelo) pero sumando todos los
 // modelos de cada POS en una sola fila, sin columna Modelo.
-function renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv, accountInt) {
+function renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv, accountInt, account) {
   const dias = diasVentana(fecha);
 
   const base = ventasRaw.filter(r =>
@@ -752,6 +788,7 @@ function renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv
     (!pos || r.pos === pos) &&
     (!accountVv || r.accountVv === accountVv) &&
     (!accountInt || r.account_int === accountInt) &&
+    (!account || r.accountGroup === account) &&
     dias.includes(r.fecha)
   );
 
@@ -771,7 +808,8 @@ function renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv
     (!zona || eq(t.zona, zona)) &&
     (!pos || eq(t.pos, pos)) &&
     (!accountInt || eq(t.account_int, accountInt)) &&
-    (!accountVv || eq(t.accountVv, accountVv))
+    (!accountVv || eq(t.accountVv, accountVv)) &&
+    (!account || eq(t.accountGroup || accountGroupDeAccountInt(t.account_int), account))
   );
   const cvByPos = {};
   tgPos.forEach(t => {
@@ -808,7 +846,7 @@ function renderDetailTablePos(fecha, corte, region, zona, pos, modelo, accountVv
   }).join('');
 }
 
-function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, accountInt) {
+function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, accountInt, account) {
   const dias = diasVentana(fecha);
 
   const base = ventasRaw.filter(r =>
@@ -819,6 +857,7 @@ function renderDetailTable(fecha, corte, region, zona, pos, modelo, accountVv, a
     (!modelo || r.modelo === modelo) &&
     (!accountVv || r.accountVv === accountVv) &&
     (!accountInt || r.account_int === accountInt) &&
+    (!account || r.accountGroup === account) &&
     dias.includes(r.fecha)
   );
 
@@ -855,13 +894,21 @@ function arPill(ar) {
 }
 
 function renderCharts(filtradas) {
-  // SO por región
-  const porRegion = {};
+  // SO por región, apilado por account (CLARO / ENTEL / OM = resto de cuentas)
+  const regiones = [...new Set(filtradas.map(r => regionDeZona(r.zona)).filter(Boolean))];
+  const porRegionTotal = {};
+  filtradas.forEach(r => { porRegionTotal[regionDeZona(r.zona)] = (porRegionTotal[regionDeZona(r.zona)] || 0) + r.so; });
+  regiones.sort((a, b) => (porRegionTotal[b] || 0) - (porRegionTotal[a] || 0));
+
+  const gruposCuenta = ['CLARO', 'ENTEL', 'OM'];
+  const porRegionCuenta = {}; // { region: { CLARO: so, ENTEL: so, OM: so } }
+  regiones.forEach(reg => { porRegionCuenta[reg] = { CLARO: 0, ENTEL: 0, OM: 0 }; });
   filtradas.forEach(r => {
     const reg = regionDeZona(r.zona);
-    porRegion[reg] = (porRegion[reg] || 0) + r.so;
+    if (!porRegionCuenta[reg]) return;
+    const g = gruposCuenta.includes(r.accountGroup) ? r.accountGroup : 'OM';
+    porRegionCuenta[reg][g] += r.so;
   });
-  const regEntries = Object.entries(porRegion).sort((a, b) => b[1] - a[1]);
 
   // SO/SK por modelo (top 8 por SO)
   const porModelo = {};
@@ -875,14 +922,30 @@ function renderCharts(filtradas) {
 
   const azul = '#1e46e6';
   const verde = '#1a6b3a';
+  const coloresCuenta = { CLARO: '#ff8a80', ENTEL: '#4fc3f7', OM: '#ffa94d' }; // rojo claro / azul-celeste claro / anaranjado medio
 
   const dataLabelStyle = { anchor: 'end', align: 'end', color: '#0d1540', font: { weight: '700', size: 11 } };
 
   if (chartRegion) chartRegion.destroy();
   chartRegion = new Chart(document.getElementById('chart-region'), {
     type: 'bar',
-    data: { labels: regEntries.map(e => e[0]), datasets: [{ data: regEntries.map(e => e[1]), backgroundColor: azul, borderRadius: 6, maxBarThickness: 48 }] },
-    options: { plugins: { legend: { display: false }, datalabels: dataLabelStyle }, scales: { y: { beginAtZero: true, grid: { color: '#eaeefc' } }, x: { grid: { display: false } } } },
+    data: {
+      labels: regiones,
+      datasets: gruposCuenta.map(g => ({
+        label: g,
+        data: regiones.map(reg => porRegionCuenta[reg][g]),
+        backgroundColor: coloresCuenta[g],
+        borderRadius: 4,
+        maxBarThickness: 48
+      }))
+    },
+    options: {
+      plugins: {
+        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        datalabels: { ...dataLabelStyle, display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0, anchor: 'center', align: 'center', color: '#0d1540' }
+      },
+      scales: { y: { beginAtZero: true, stacked: true, grid: { color: '#eaeefc' } }, x: { stacked: true, grid: { display: false } } }
+    },
     plugins: [ChartDataLabels]
   });
 
@@ -907,6 +970,7 @@ function iniciar() {
   if (typeof ChartDataLabels !== 'undefined' && !Chart.registry.plugins.get('datalabels')) Chart.register(ChartDataLabels);
   cargarTodo();
   if (AUTO_REFRESH_SECONDS > 0) setInterval(() => cargarTodo(false), AUTO_REFRESH_SECONDS * 1000);
+}
 
 /* ── exportar CSV: fecha | account_int | account_vv | POS | modelo | SO | SK | cv_p | cv_r ── */
 function csvEscape(v) {
@@ -922,6 +986,7 @@ function exportarCsv() {
   const modelo = document.getElementById('f-modelo').value;
   const accountVv = document.getElementById('f-account-vv').value;
   const accountInt = document.getElementById('f-account-int').value;
+  const account = document.getElementById('f-account').value;
 
   const filas = ventasRaw.filter(r =>
     (!corte || r.corte === corte) &&
@@ -930,7 +995,8 @@ function exportarCsv() {
     (!pos || r.pos === pos) &&
     (!modelo || r.modelo === modelo) &&
     (!accountVv || r.accountVv === accountVv) &&
-    (!accountInt || r.account_int === accountInt)
+    (!accountInt || r.account_int === accountInt) &&
+    (!account || r.accountGroup === account)
   );
 
   // cv_p / cv_r por POS (zona+account_int+pos), igual criterio que en las tablas
@@ -950,16 +1016,25 @@ function exportarCsv() {
   });
 
   const csv = '\uFEFF' + lineas.join('\r\n'); // BOM para que Excel abra bien los acentos
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `ventas_vivo_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ventas_vivo_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (err) {
+    // algunos navegadores integrados (ej. el de WhatsApp/Instagram) bloquean la
+    // descarga directa — como respaldo, abrimos el CSV en una pestaña nueva para
+    // que el usuario lo guarde manualmente ("Compartir" / "Guardar como")
+    const url = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    const abierto = window.open(url, '_blank');
+    if (!abierto) alert('No se pudo descargar. Abrí este dashboard en Chrome o Safari (no en el navegador dentro de WhatsApp/Instagram) e intentá de nuevo.');
+  }
 }
 iniciar();
 </script>
