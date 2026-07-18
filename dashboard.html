@@ -282,7 +282,7 @@ const SHEET_ID = '1JiB9SMNwMzbWmD2bU8Wax47su0vtfKNKDrxI6VeCXM0';
 const DATA_SHEET_NAME = 'Hoja 1';   // TODO: nombre real de la pestaña donde el Apps Script escribe las ventas
 const METAS_SHEET_NAME = 'tg_day';  // pestaña: account_vv | account_int | zone | tg_day (supervisor es opcional)
 const TG_MONTH_SHEET_NAME = 'tg_month'; // pestaña: zona | account_int | pos | cv_p | cv_r (base de POS totales y cobertura)
-const AUTO_REFRESH_SECONDS = 60;    // 0 para desactivar el auto-refresh
+const AUTO_REFRESH_SECONDS = 3600;  // se auto-actualiza cada 1 hora; el botón "Actualizar" siempre fuerza una actualización al instante
 
 // Nombres de encabezado esperados en la pestaña de ventas → alias aceptados (minúsculas, sin espacios)
 const FIELD_ALIASES = {
