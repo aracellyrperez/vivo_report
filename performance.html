@@ -854,6 +854,10 @@ function renderDetallePos(d) {
 /* ── exportar CSV — mismo formato que la Tabla 2 (Zona/POS con cv_p/cv_r/DNI/user y modelos) ── */
 function csvEscape(v) { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 
+function htmlEscape(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function exportarCsv() {
   const fecha = document.getElementById('f-fecha').value || new Date().toISOString().split('T')[0];
   const region = document.getElementById('f-region').value;
@@ -877,25 +881,45 @@ function exportarCsv() {
   );
   const d = construirDetallePos(ventasMes, stockActual, metasMes);
 
-  const header = ['region', 'zona', 'POS', 'cv_p', 'cv_r', 'DNI1', 'user1', 'DNI2', 'user2', 'so', 'cuota', 'A/R', 'SK']
-    .concat(d.modelos.flatMap(m => [`${m} so`, `${m} sk`]));
-  const lineas = [header.map(csvEscape).join(',')];
-  d.filas.forEach(f => {
-    const fila = [f.region, f.zona, f.pos, f.cv_p, f.cv_r, f.dni1, f.user1, f.dni2, f.user2, f.so, f.cuota, Math.round(f.ar) + '%', f.sk]
-      .concat(d.modelos.flatMap(m => [f.porModeloSo[m] || 0, f.porModeloSk[m] || 0]));
-    lineas.push(fila.map(csvEscape).join(','));
-  });
+  const header = ['Región', 'Zona', 'POS', 'CV_p', 'CV_r', 'DNI1', 'User1', 'DNI2', 'User2', 'SO', 'Cuota', 'A/R', 'SK']
+    .concat(d.modelos.flatMap(m => [`${nombreModeloCorto(m)} SO`, `${nombreModeloCorto(m)} SK`]));
 
-  const csv = '\uFEFF' + lineas.join('\r\n');
+  // Excel entiende una tabla HTML como si fuera una planilla si se la servimos
+  // con el mime type correcto — así conseguimos color/formato real sin
+  // necesitar ninguna librería para generar un .xlsx binario.
+  const thStyle = 'background:#1e46e6;color:#ffffff;font-weight:bold;padding:6px 10px;border:1px solid #a8baff;white-space:nowrap;font-family:Calibri,Arial,sans-serif;font-size:12px;';
+  const tdStyle = 'padding:5px 9px;border:1px solid #d4daff;font-family:Calibri,Arial,sans-serif;font-size:12px;';
+  const tdNumStyle = tdStyle + 'text-align:right;';
+  const tdTotalStyle = tdStyle + 'background:#eaeefc;font-weight:bold;';
+
+  const theadHtml = '<tr>' + header.map(h => `<th style="${thStyle}">${htmlEscape(h)}</th>`).join('') + '</tr>';
+
+  const filasHtml = d.filas.map(f => {
+    const textos = [f.region, f.zona, f.pos, f.dni1, f.user1, f.dni2, f.user2];
+    const numeros = [f.cv_p, f.cv_r, f.so, f.cuota, Math.round(f.ar) + '%', f.sk]
+      .concat(d.modelos.flatMap(m => [f.porModeloSo[m] || 0, f.porModeloSk[m] || 0]));
+    return '<tr>' +
+      `<td style="${tdStyle}">${htmlEscape(f.region)}</td><td style="${tdStyle}">${htmlEscape(f.zona)}</td><td style="${tdStyle}">${htmlEscape(f.pos)}</td>` +
+      `<td style="${tdNumStyle}">${fmt(f.cv_p)}</td><td style="${tdNumStyle}">${fmt(f.cv_r)}</td>` +
+      `<td style="${tdStyle}">${htmlEscape(f.dni1)}</td><td style="${tdStyle}">${htmlEscape(f.user1)}</td><td style="${tdStyle}">${htmlEscape(f.dni2)}</td><td style="${tdStyle}">${htmlEscape(f.user2)}</td>` +
+      `<td style="${tdNumStyle}">${fmt(f.so)}</td><td style="${tdNumStyle}">${fmt(f.cuota)}</td><td style="${tdNumStyle}">${Math.round(f.ar)}%</td><td style="${tdNumStyle}">${fmt(f.sk)}</td>` +
+      d.modelos.map(m => `<td style="${tdNumStyle}">${fmt(f.porModeloSo[m] || 0)}</td><td style="${tdNumStyle}">${fmt(f.porModeloSk[m] || 0)}</td>`).join('') +
+      '</tr>';
+  }).join('');
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Reporte</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+<body><table>${theadHtml}${filasHtml}</table></body></html>`;
+
   try {
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `reporte_mensual_vivo_${fecha}.csv`;
+    a.href = url; a.download = `reporte_mensual_vivo_${fecha}.xls`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   } catch (err) {
-    const url = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(html);
     const abierto = window.open(url, '_blank');
     if (!abierto) alert('No se pudo descargar. Abrí este reporte en Chrome o Safari e intentá de nuevo.');
   }
