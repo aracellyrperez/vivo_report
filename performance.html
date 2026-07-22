@@ -157,13 +157,18 @@ table.sup-table tr.total-row td { background:var(--bg2); font-weight:800; border
 
     <div class="charts-grid">
       <div class="chart-card">
-        <h3>SO del mes por región</h3>
+        <h3>SO/SK por región</h3>
         <canvas id="chart-region"></canvas>
       </div>
       <div class="chart-card">
-        <h3>SO del mes por modelo</h3>
+        <h3>SO/SK por modelo</h3>
         <canvas id="chart-modelo"></canvas>
       </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:28px">
+      <h3>SO/SK por zona</h3>
+      <canvas id="chart-zona"></canvas>
     </div>
 
     <div class="tabs">
@@ -223,7 +228,7 @@ let tgMonthRows = [];
 let soEnriquecido = [];
 let skEnriquecido = [];
 let sortState = { region: { key:'so', dir:-1 }, sup: { key:'so', dir:-1 } };
-let chartRegion = null, chartModelo = null;
+let chartRegion = null, chartModelo = null, chartZona = null;
 
 document.getElementById('f-fecha').value = new Date().toISOString().split('T')[0];
 
@@ -1016,6 +1021,49 @@ function renderCharts(ventasMes, stockActual) {
         datalabels: { anchor: 'end', align: 'end', color: '#0d1540', font: { weight: '700', size: 10 } }
       },
       scales: { x: { beginAtZero: true, grid: { color: '#eaeefc' } }, y: { grid: { display: false } } }
+    },
+    plugins: window.ChartDataLabels ? [ChartDataLabels] : []
+  });
+
+  // SO / SK por zona — vertical (zonas en el eje X, cantidades en el eje Y),
+  // ordenadas por región (Center, Lima, North, South) y dentro de cada una
+  // por número (1, 2, 3…), no alfabético puro.
+  const porZona = {};
+  ventasMes.forEach(r => { if (!r.zona) return; if (!porZona[r.zona]) porZona[r.zona] = { so: 0, sk: 0 }; porZona[r.zona].so += r.so; });
+  stockActual.forEach(r => { if (!r.zona) return; if (!porZona[r.zona]) porZona[r.zona] = { so: 0, sk: 0 }; porZona[r.zona].sk += r.stock; });
+
+  const ordenRegion = ['CENTER', 'LIMA', 'NORTH', 'SOUTH'];
+  function partesZona(z) {
+    const m = String(z).trim().match(/^([A-Za-zÀ-ÿ]+)\s*(\d*)$/);
+    const prefijo = m ? m[1].toUpperCase() : String(z).toUpperCase();
+    const numero = m && m[2] ? parseInt(m[2], 10) : 0;
+    let orden = ordenRegion.indexOf(prefijo);
+    if (orden === -1) orden = ordenRegion.length; // regiones no listadas (ej. "Virtual") van al final
+    return { orden, numero, prefijo };
+  }
+  const zonaEntries = Object.entries(porZona).sort((a, b) => {
+    const pa = partesZona(a[0]), pb = partesZona(b[0]);
+    if (pa.orden !== pb.orden) return pa.orden - pb.orden;
+    if (pa.numero !== pb.numero) return pa.numero - pb.numero;
+    return pa.prefijo.localeCompare(pb.prefijo, 'es');
+  });
+
+  if (chartZona) chartZona.destroy();
+  chartZona = new Chart(document.getElementById('chart-zona'), {
+    type: 'bar',
+    data: {
+      labels: zonaEntries.map(e => e[0]),
+      datasets: [
+        { label: 'SO', data: zonaEntries.map(e => e[1].so), backgroundColor: azul, borderRadius: 4, maxBarThickness: 18 },
+        { label: 'SK', data: zonaEntries.map(e => e[1].sk), backgroundColor: verde, borderRadius: 4, maxBarThickness: 18 }
+      ]
+    },
+    options: {
+      plugins: {
+        legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        datalabels: { anchor: 'end', align: 'end', color: '#0d1540', font: { weight: '700', size: 9 } }
+      },
+      scales: { x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 60, minRotation: 45, font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#eaeefc' } } }
     },
     plugins: window.ChartDataLabels ? [ChartDataLabels] : []
   });
