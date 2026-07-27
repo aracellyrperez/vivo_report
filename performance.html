@@ -615,13 +615,21 @@ function poblarFiltros() {
   const accountVvActual = document.getElementById('f-account-vv').value;
   const accountActual = document.getElementById('f-account').value;
   const channelActual = document.getElementById('f-channel').value;
-  const posOptions = [...new Set(ventasRaw.filter(r =>
-    (!zonaActual || r.zona === zonaActual) &&
-    (!accountIntActual || r.account_int === accountIntActual) &&
-    (!accountVvActual || r.accountVv === accountVvActual) &&
-    (!accountActual || r.accountGroup === accountActual) &&
-    (!channelActual || r.channel === channelActual)
-  ).map(r => r.pos).filter(Boolean))].sort();
+  function pasaCascadaPos(r) {
+    return (!zonaActual || r.zona === zonaActual) &&
+      (!accountIntActual || r.account_int === accountIntActual) &&
+      (!accountVvActual || r.accountVv === accountVvActual) &&
+      (!accountActual || r.accountGroup === accountActual) &&
+      (!channelActual || r.channel === channelActual);
+  }
+  // el POS puede existir solo en so/sk/tg_month (todavía sin ninguna venta
+  // reportada en Hoja 1) — se incluyen las 4 fuentes para no dejarlo afuera
+  const posOptions = [...new Set([
+    ...ventasRaw.filter(pasaCascadaPos).map(r => r.pos),
+    ...soEnriquecido.filter(pasaCascadaPos).map(r => r.pos),
+    ...skEnriquecido.filter(pasaCascadaPos).map(r => r.pos),
+    ...tgMonthRows.filter(pasaCascadaPos).map(r => r.pos)
+  ].filter(Boolean))].sort();
   const selPos = document.getElementById('f-pos');
   const prevPos = selPos.value;
   selPos.innerHTML = '<option value="">Todos</option>' + posOptions.map(p => `<option value="${p}">${p}</option>`).join('');
@@ -728,13 +736,20 @@ function calcularSoMes(fecha, filtros) {
    siquiera como respaldo para cuentas que todavía no estén en "sk". */
 function calcularStockActual(filtros) {
   const skFiltrado = skEnriquecido.filter(r => pasaFiltrosComunes(r, filtros));
-  // por cada POS+modelo, nos quedamos con la fecha más reciente disponible en
-  // "sk" — si "sk" acumula una fila por día en vez de tener solo la última
-  // foto, sin esto se sumarían todas las fechas y el stock queda inflado.
+  // por cada POS+modelo (group_model): "sk" trae una fila por CADA COLOR (varios
+  // id_mi distintos pueden compartir el mismo group_model/id_mf), así que en la
+  // MISMA fecha hay que sumarlas todas. Si aparece una fecha más nueva, esa
+  // reemplaza a la anterior (es una foto más actual, no se suma con la vieja).
   const porClave = {};
   skFiltrado.forEach(r => {
     const k = normLoose(r.pos) + '||' + normLoose(r.modelo);
-    if (!porClave[k] || r.fecha > porClave[k].fecha) porClave[k] = r;
+    const actual = porClave[k];
+    if (!actual || r.fecha > actual.fecha) {
+      porClave[k] = { ...r };
+    } else if (r.fecha === actual.fecha) {
+      actual.stock += r.stock;
+    }
+    // si r.fecha < actual.fecha, es una fecha vieja: se ignora
   });
   return Object.values(porClave).map(r => ({ pos: r.pos, zona: r.zona, modelo: r.modelo, accountGroup: r.accountGroup, channel: r.channel, stock: r.stock }));
 }
