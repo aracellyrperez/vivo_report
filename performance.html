@@ -930,6 +930,12 @@ function htmlEscape(v) {
   return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function xmlEscape(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function celdaTxt(v, styleId) { return `<Cell${styleId ? ` ss:StyleID="${styleId}"` : ''}><Data ss:Type="String">${xmlEscape(v)}</Data></Cell>`; }
+function celdaNum(v, styleId) { const n = Number(v) || 0; return `<Cell${styleId ? ` ss:StyleID="${styleId}"` : ''}><Data ss:Type="Number">${n}</Data></Cell>`; }
+
 function exportarCsv() {
   const fecha = document.getElementById('f-fecha').value || new Date().toISOString().split('T')[0];
   const region = document.getElementById('f-region').value;
@@ -955,51 +961,65 @@ function exportarCsv() {
   );
   const d = construirDetallePos(ventasMes, stockActual, metasMes);
 
-  const header = ['Región', 'Zona', 'account', 'account_int', 'account_vv', 'channel', 'POS', 'CV_p', 'CV_r', 'DNI1', 'User1', 'DNI2', 'User2', 'SO', 'Cuota', 'A/R', 'SK', 'Atributo', 'modelo', 'qty'];
-
-  // Excel entiende una tabla HTML como si fuera una planilla si se la servimos
-  // con el mime type correcto — así conseguimos color/formato real sin
-  // necesitar ninguna librería para generar un .xlsx binario.
-  const thStyle = 'background:#1e46e6;color:#ffffff;font-weight:bold;padding:6px 10px;border:1px solid #a8baff;white-space:nowrap;font-family:Calibri,Arial,sans-serif;font-size:12px;';
-  const tdStyle = 'padding:5px 9px;border:1px solid #d4daff;font-family:Calibri,Arial,sans-serif;font-size:12px;';
-  const tdNumStyle = tdStyle + 'text-align:right;';
-
-  const theadHtml = '<tr>' + header.map(h => `<th style="${thStyle}">${htmlEscape(h)}</th>`).join('') + '</tr>';
-
-  // formato "largo": una fila por cada combinación POS + modelo + atributo
-  // (SO o SK) — se salta cuando qty es 0, para no llenar el archivo de líneas
-  // vacías multiplicando modelos × POS × 2.
-  const filasLargas = [];
+  // ── Hoja 1: formato "largo" — una fila por cada combinación POS + modelo +
+  // atributo (SO o SK); se salta cuando qty es 0 ──
+  const header1 = ['Región', 'Zona', 'account', 'account_int', 'account_vv', 'channel', 'POS', 'CV_p', 'CV_r', 'DNI1', 'User1', 'DNI2', 'User2', 'SO', 'Cuota', 'A/R', 'SK', 'Atributo', 'modelo', 'qty'];
+  const filas1 = [];
   d.filas.forEach(f => {
-    const comun = `<td style="${tdStyle}">${htmlEscape(f.region)}</td><td style="${tdStyle}">${htmlEscape(f.zona)}</td>` +
-      `<td style="${tdStyle}">${htmlEscape(f.account)}</td><td style="${tdStyle}">${htmlEscape(f.accountInt)}</td><td style="${tdStyle}">${htmlEscape(f.accountVv)}</td><td style="${tdStyle}">${htmlEscape(f.channel)}</td>` +
-      `<td style="${tdStyle}">${htmlEscape(f.pos)}</td>` +
-      `<td style="${tdNumStyle}">${fmt(f.cv_p)}</td><td style="${tdNumStyle}">${fmt(f.cv_r)}</td>` +
-      `<td style="${tdStyle}">${htmlEscape(f.dni1)}</td><td style="${tdStyle}">${htmlEscape(f.user1)}</td><td style="${tdStyle}">${htmlEscape(f.dni2)}</td><td style="${tdStyle}">${htmlEscape(f.user2)}</td>` +
-      `<td style="${tdNumStyle}">${fmt(f.so)}</td><td style="${tdNumStyle}">${fmt(f.cuota)}</td><td style="${tdNumStyle}">${Math.round(f.ar)}%</td><td style="${tdNumStyle}">${fmt(f.sk)}</td>`;
-
+    const comunes = [f.region, f.zona, f.account, f.accountInt, f.accountVv, f.channel, f.pos];
+    const comunesNum = [f.cv_p, f.cv_r];
+    const comunesTxt2 = [f.dni1, f.user1, f.dni2, f.user2];
+    const comunesNum2 = [f.so, f.cuota];
     d.modelos.forEach(m => {
       const qtySo = f.porModeloSo[m] || 0;
       const qtySk = f.porModeloSk[m] || 0;
-      if (qtySo > 0) filasLargas.push(`<tr>${comun}<td style="${tdStyle}">SO</td><td style="${tdStyle}">${htmlEscape(nombreModeloCorto(m))}</td><td style="${tdNumStyle}">${fmt(qtySo)}</td></tr>`);
-      if (qtySk > 0) filasLargas.push(`<tr>${comun}<td style="${tdStyle}">SK</td><td style="${tdStyle}">${htmlEscape(nombreModeloCorto(m))}</td><td style="${tdNumStyle}">${fmt(qtySk)}</td></tr>`);
+      if (qtySo > 0) filas1.push({ comunes, comunesNum, comunesTxt2, comunesNum2, ar: f.ar, sk: f.sk, atributo: 'SO', modelo: nombreModeloCorto(m), qty: qtySo });
+      if (qtySk > 0) filas1.push({ comunes, comunesNum, comunesTxt2, comunesNum2, ar: f.ar, sk: f.sk, atributo: 'SK', modelo: nombreModeloCorto(m), qty: qtySk });
     });
   });
-  const filasHtml = filasLargas.join('');
+  const filas1Xml = filas1.map(r => '<Row>' +
+    r.comunes.map(v => celdaTxt(v)).join('') +
+    r.comunesNum.map(v => celdaNum(v)).join('') +
+    r.comunesTxt2.map(v => celdaTxt(v)).join('') +
+    r.comunesNum2.map(v => celdaNum(v)).join('') +
+    celdaTxt(Math.round(r.ar) + '%') + celdaNum(r.sk) +
+    celdaTxt(r.atributo) + celdaTxt(r.modelo) + celdaNum(r.qty) +
+    '</Row>').join('');
 
-  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Reporte</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
-<body><table>${theadHtml}${filasHtml}</table></body></html>`;
+  // ── Hoja 2: detalle diario sin agregar — una fila por cada venta que se
+  // está considerando en el SO del mes (Hoja 1 Corte 3 + "so"), tal cual ──
+  const header2 = ['fecha', 'Región', 'Zona', 'account', 'account_int', 'account_vv', 'channel_', 'POS', 'model', 'qty'];
+  const filas2Xml = ventasMes.map(r => '<Row>' +
+    celdaTxt(r.fecha) + celdaTxt(regionEfectiva(r)) + celdaTxt(r.zona) +
+    celdaTxt(r.accountGroup) + celdaTxt(r.account_int) + celdaTxt(r.accountVv) + celdaTxt(r.channel) +
+    celdaTxt(r.pos) + celdaTxt(nombreModeloCorto(r.modelo)) + celdaNum(r.so) +
+    '</Row>').join('');
+
+  const filaHeader = (cols) => '<Row>' + cols.map(h => celdaTxt(h, 'Header')).join('') + '</Row>';
+
+  const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Styles>
+<Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E46E6" ss:Pattern="Solid"/></Style>
+</Styles>
+<Worksheet ss:Name="Reporte">
+<Table>${filaHeader(header1)}${filas1Xml}</Table>
+</Worksheet>
+<Worksheet ss:Name="Detalle diario">
+<Table>${filaHeader(header2)}${filas2Xml}</Table>
+</Worksheet>
+</Workbook>`;
 
   try {
-    const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel' });
+    const blob = new Blob(['\ufeff', xml], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `reporte_mensual_vivo_${fecha}.xls`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   } catch (err) {
-    const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(html);
+    const url = 'data:application/vnd.ms-excel,' + encodeURIComponent(xml);
     const abierto = window.open(url, '_blank');
     if (!abierto) alert('No se pudo descargar. Abrí este reporte en Chrome o Safari e intentá de nuevo.');
   }
