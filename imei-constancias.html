@@ -46,6 +46,16 @@
   .role-label { font-size: 14px; font-weight: 700; color: var(--ink2); }
   .role-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
 
+  /* ── Filtro de estado (nuevo) ── */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .filter-btn { padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--bg); font-family: 'Exo 2', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--muted); transition: all 0.15s; }
+  .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .imei-fecha { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .imei-motivo { font-size: 11px; color: var(--ink2); margin-top: 6px; padding: 6px 8px; background: var(--bg); border-radius: 6px; line-height: 1.4; }
+  .imei-motivo.rechazado { background: #fef2f2; color: #991b1b; }
+  .imei-motivo.rechazado strong { color: var(--error); }
+
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 12px; font-weight: 600; color: var(--ink2); margin-bottom: 6px; letter-spacing: .04em; }
   .field input, .field select { width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-family: 'Exo 2', sans-serif; font-size: 14px; color: var(--ink2); background: var(--bg); transition: border-color 0.2s; outline: none; }
@@ -144,6 +154,17 @@
     </div>
   </div>
 
+  <!-- FILTRO DE ESTADO (nuevo) -->
+  <div class="card hidden" id="step-filtro-estado">
+    <div class="card-title">Filtrar por estado</div>
+    <div class="filter-bar">
+      <button class="filter-btn active" data-estado="" onclick="cambiarFiltroEstado('')">Todo</button>
+      <button class="filter-btn" data-estado="Aprobado" onclick="cambiarFiltroEstado('Aprobado')">Aprobado</button>
+      <button class="filter-btn" data-estado="Rechazado" onclick="cambiarFiltroEstado('Rechazado')">Rechazado</button>
+      <button class="filter-btn" data-estado="Pendiente" onclick="cambiarFiltroEstado('Pendiente')">Pendiente</button>
+    </div>
+  </div>
+
   <!-- STEP 2A: SUPERVISOR -->
   <div class="card hidden" id="step-supervisor">
     <div class="card-title"><span class="section-num">2</span> Tu nombre</div>
@@ -234,23 +255,30 @@ const SHEETS_ID = '1zG2FPWytGCSbhXblBRe1t6L23lWm0YAKjh3eBnzjqEA';
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzIw06LFGCJCL9UKvF67c_GyI4f4Tw6VwHVKgZkTJdvKP_BXJlNq-EKHRX_EbULJw/exec';
 
 let todosLosIMEIs = [];
-let constanciasStatus = {};
+let constanciasStatus = {}; // ahora: { [imei]: { estado, fecha } }
 let rolSeleccionado = null;
 let supervisorSeleccionado = null;
 let imeisPromotor = [];
 let imeisSeleccionados = new Set();
 let fotosMap = {};
+let filtroEstadoActual = ''; // '' = Todo
 
-// ── CAMBIO 1: Función para parsear fechas de Google Sheets ──
+// ── Parsea fechas que vienen de Google Sheets como Date(y,m,d[,h,mi,s]) o texto plano ──
 function parseFecha(val) {
   if (!val) return '';
-  const m = String(val).match(/Date\((\d+),(\d+),(\d+)\)/);
+  const m = String(val).match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
   if (m) {
     const y = m[1];
     const mes = String(parseInt(m[2]) + 1).padStart(2, '0');
     const d = String(m[3]).padStart(2, '0');
-    return `${d}/${mes}/${y}`;
+    let out = `${d}/${mes}/${y}`;
+    if (m[4] !== undefined) {
+      out += ` ${String(m[4]).padStart(2,'0')}:${String(m[5]).padStart(2,'0')}`;
+    }
+    return out;
   }
+  const m2 = String(val).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (m2) return `${m2[3]}/${m2[2]}/${m2[1]} ${m2[4]}:${m2[5]}`;
   return val;
 }
 
@@ -298,10 +326,20 @@ async function cargarDatos() {
       const rowsC = jsonC.table.rows;
       const idxImei   = colsC.findIndex(c => c.toLowerCase() === 'imei');
       const idxEstado = colsC.findIndex(c => c.toLowerCase() === 'estado');
+      const idxComentario = colsC.findIndex(c => c.toLowerCase() === 'comentario');
+      // la columna A de "Constancias" siempre es la fecha de envío (fechaEnvio)
+      let idxFecha = colsC.findIndex(c => c.toLowerCase().includes('fechaenvio'));
+      if (idxFecha === -1) idxFecha = 0;
+
       constanciasStatus = {};
       rowsC.forEach(r => {
-        if (r.c[idxImei]?.v && r.c[idxEstado]?.v) {
-          constanciasStatus[String(r.c[idxImei].v).trim()] = r.c[idxEstado].v;
+        if (r.c[idxImei]?.v) {
+          const imeiKey = String(r.c[idxImei].v).trim();
+          constanciasStatus[imeiKey] = {
+            estado: r.c[idxEstado]?.v || 'Pendiente',
+            fecha: parseFecha(r.c[idxFecha]?.v || ''),
+            comentario: r.c[idxComentario]?.v || ''
+          };
         }
       });
     } catch(e) {}
@@ -321,6 +359,14 @@ async function cargarDatos() {
   }
 }
 
+// ── Filtro de estado (nuevo) ────────────────────────────────────────────────
+function cambiarFiltroEstado(estado) {
+  filtroEstadoActual = estado;
+  document.querySelectorAll('#step-filtro-estado .filter-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.estado === estado));
+  if (imeisPromotor.length) mostrarIMEIs(imeisPromotor);
+}
+
 function elegirRol(rol) {
   rolSeleccionado = rol;
   document.getElementById('btn-promotor').classList.toggle('active', rol === 'promotor');
@@ -329,6 +375,8 @@ function elegirRol(rol) {
   imeisSeleccionados.clear(); fotosMap = {};
   ['step-supervisor','step-dni','step-imeis','step-upload'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
+
+  document.getElementById('step-filtro-estado').classList.remove('hidden');
 
   if (rol === 'promotor') {
     document.getElementById('dni-num').textContent = '2';
@@ -433,6 +481,7 @@ async function buscarDNI() {
   mostrarIMEIs(encontrados);
 }
 
+// ── Lista de IMEIs — ahora respeta filtroEstadoActual y muestra fecha de última foto ──
 function mostrarIMEIs(imeis) {
   const step = document.getElementById('step-imeis');
   step.classList.remove('hidden');
@@ -444,11 +493,26 @@ function mostrarIMEIs(imeis) {
 
   const list = document.getElementById('imei-list');
   list.innerHTML = '';
+  let visibles = 0;
+
   imeis.forEach((item, i) => {
-    const estado = constanciasStatus[item.imei] || 'Pendiente';
+    const info = constanciasStatus[item.imei];
+    const estado = info?.estado || 'Pendiente';
+    const ultimaFoto = info?.fecha || 'Sin fecha';
+    const comentario = info?.comentario || '';
+
+    if (filtroEstadoActual && estado !== filtroEstadoActual) return; // no coincide con el filtro
+    visibles++;
+
     const esAprobado = estado === 'Aprobado';
-    const statusColor = esAprobado ? '#16a34a' : estado === 'Rechazado' ? '#dc2626' : '#d97706';
-    const statusBg = esAprobado ? '#f0fdf4' : estado === 'Rechazado' ? '#fef2f2' : '#fff7ed';
+    const esRechazado = estado === 'Rechazado';
+    const statusColor = esAprobado ? '#16a34a' : esRechazado ? '#dc2626' : '#d97706';
+    const statusBg = esAprobado ? '#f0fdf4' : esRechazado ? '#fef2f2' : '#fff7ed';
+
+    // El motivo se muestra siempre que exista comentario, pero se resalta en rojo si está Rechazado
+    const motivoHtml = comentario
+      ? '<div class="imei-motivo' + (esRechazado ? ' rechazado' : '') + '">💬 ' + (esRechazado ? '<strong>Motivo del rechazo:</strong> ' : '') + comentario + '</div>'
+      : (esRechazado ? '<div class="imei-motivo rechazado">💬 <strong>Rechazado</strong> — sin motivo registrado</div>' : '');
 
     const card = document.createElement('div');
     card.className = 'imei-card' + (esAprobado ? ' aprobado' : '');
@@ -460,13 +524,18 @@ function mostrarIMEIs(imeis) {
         '<div class="imei-check" id="check-' + i + '">✓</div>' +
         '<div class="imei-info">' +
           '<div class="imei-number">' + item.imei + '</div>' +
-          // ── CAMBIO 2: parseFecha() en la lista de IMEIs ──
           '<div class="imei-meta">' + item.modelo + ' · ' + item.pos + (item.fecha ? ' · ' + parseFecha(item.fecha) : '') + '</div>' +
+          '<div class="imei-fecha">📷 Última foto: ' + ultimaFoto + '</div>' +
+          motivoHtml +
         '</div>' +
         '<span class="imei-status" style="background:' + statusBg + ';color:' + statusColor + '">' + estado + '</span>' +
       '</div>';
     list.appendChild(card);
   });
+
+  if (visibles === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px;">No hay IMEIs con ese filtro.</div>';
+  }
 
   actualizarContador();
   step.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -488,10 +557,10 @@ function selectAll() {
   imeisPromotor.forEach((_, i) => {
     if (allSelected) {
       imeisSeleccionados.delete(i);
-      document.getElementById('imei-card-' + i).classList.remove('selected');
+      document.getElementById('imei-card-' + i)?.classList.remove('selected');
     } else {
       imeisSeleccionados.add(i);
-      document.getElementById('imei-card-' + i).classList.add('selected');
+      document.getElementById('imei-card-' + i)?.classList.add('selected');
     }
   });
   actualizarContador();
@@ -519,7 +588,6 @@ function irAUpload() {
     div.innerHTML =
       '<div class="imei-upload-header">' +
         '<div class="imei-num">' + item.imei + '</div>' +
-        // ── CAMBIO 3: parseFecha() en el paso de upload ──
         '<div class="imei-det">' + item.modelo + ' · ' + item.pos + (item.fecha ? ' · ' + parseFecha(item.fecha) : '') + '</div>' +
       '</div>' +
       '<div class="imei-upload-body">' +
@@ -615,7 +683,7 @@ async function enviarConstancias() {
 }
 
 function showSuccess(constancias) {
-  ['step-rol','step-supervisor','step-dni','step-imeis','step-upload'].forEach(id =>
+  ['step-rol','step-filtro-estado','step-supervisor','step-dni','step-imeis','step-upload'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   document.getElementById('success-screen').style.display = 'block';
 
@@ -636,13 +704,15 @@ function showSuccess(constancias) {
 function resetApp() {
   rolSeleccionado = null; supervisorSeleccionado = null;
   imeisPromotor = []; imeisSeleccionados.clear(); fotosMap = {};
+  filtroEstadoActual = '';
+  document.querySelectorAll('#step-filtro-estado .filter-btn').forEach(b => b.classList.toggle('active', b.dataset.estado === ''));
   document.getElementById('supervisor-select').value = '';
   document.getElementById('dni-input').value = '';
   document.getElementById('btn-promotor').classList.remove('active');
   document.getElementById('btn-supervisor').classList.remove('active');
   document.getElementById('success-screen').style.display = 'none';
   document.getElementById('step-rol').classList.remove('hidden');
-  ['step-supervisor','step-dni','step-imeis','step-upload'].forEach(id =>
+  ['step-filtro-estado','step-supervisor','step-dni','step-imeis','step-upload'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
