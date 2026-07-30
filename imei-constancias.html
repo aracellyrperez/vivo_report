@@ -344,13 +344,7 @@ async function cargarDatos() {
       });
     } catch(e) {}
 
-    const supervisores = [...new Set(todosLosIMEIs.map(r => r.supervisor).filter(Boolean))].sort();
-    const select = document.getElementById('supervisor-select');
-    supervisores.forEach(sup => {
-      const opt = document.createElement('option');
-      opt.value = sup; opt.textContent = sup;
-      select.appendChild(opt);
-    });
+    poblarSupervisorSelect();
     document.getElementById('loading-supervisores').style.display = 'none';
   } catch (err) {
     const el = document.getElementById('loading-supervisores');
@@ -359,11 +353,71 @@ async function cargarDatos() {
   }
 }
 
+// ── Un IMEI "matchea" el filtro si no hay filtro, o si su estado coincide ───
+function imeiMatchesFiltro(item) {
+  if (!filtroEstadoActual) return true;
+  const estado = constanciasStatus[item.imei]?.estado || 'Pendiente';
+  return estado === filtroEstadoActual;
+}
+
+// ── Arma el <select> de Supervisor solo con quienes tienen IMEIs en el estado filtrado ──
+function poblarSupervisorSelect() {
+  const disponibles = todosLosIMEIs.filter(imeiMatchesFiltro);
+  const supervisores = [...new Set(disponibles.map(r => r.supervisor).filter(Boolean))].sort();
+  const select = document.getElementById('supervisor-select');
+  const prevValue = select.value;
+  select.innerHTML = '<option value="">— Seleccioná tu nombre —</option>';
+  supervisores.forEach(sup => {
+    const opt = document.createElement('option');
+    opt.value = sup; opt.textContent = sup;
+    select.appendChild(opt);
+  });
+  if (supervisores.includes(prevValue)) {
+    select.value = prevValue;
+  } else if (prevValue) {
+    // el supervisor que tenía elegido ya no tiene nada con este filtro
+    supervisorSeleccionado = null;
+    document.getElementById('supervisor-badge').classList.add('hidden');
+    document.getElementById('step-imeis').classList.add('hidden');
+    document.getElementById('step-upload').classList.add('hidden');
+  }
+}
+
+// ── Arma el <select> de Promotor solo con quienes tienen IMEIs en el estado filtrado ──
+function poblarPromotorSelect(sup) {
+  const promotores = [...new Map(
+    todosLosIMEIs
+      .filter(r => r.supervisor === sup && imeiMatchesFiltro(r))
+      .map(r => [r.dni, r])
+  ).values()].sort((a, b) => a.user.localeCompare(b.user));
+
+  const select = document.getElementById('promotor-select');
+  const prevValue = select.value;
+  select.innerHTML = '<option value="">— Seleccioná un promotor —</option>';
+  promotores.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.dni;
+    opt.textContent = p.user + ' — DNI: ' + p.dni;
+    select.appendChild(opt);
+  });
+  if (promotores.some(p => p.dni === prevValue)) {
+    select.value = prevValue;
+  } else if (prevValue) {
+    // el promotor que tenía elegido ya no tiene nada con este filtro
+    document.getElementById('step-imeis').classList.add('hidden');
+    document.getElementById('step-upload').classList.add('hidden');
+    imeisSeleccionados.clear(); fotosMap = {};
+  }
+}
+
 // ── Filtro de estado (nuevo) ────────────────────────────────────────────────
 function cambiarFiltroEstado(estado) {
   filtroEstadoActual = estado;
   document.querySelectorAll('#step-filtro-estado .filter-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.estado === estado));
+
+  poblarSupervisorSelect();
+  if (supervisorSeleccionado) poblarPromotorSelect(supervisorSeleccionado);
   if (imeisPromotor.length) mostrarIMEIs(imeisPromotor);
 }
 
@@ -411,20 +465,7 @@ function seleccionarSupervisor() {
   badge.innerHTML = '<strong style="color:var(--accent)">Supervisor:</strong> ' + sup;
   badge.classList.remove('hidden');
 
-  const promotores = [...new Map(
-    todosLosIMEIs
-      .filter(r => r.supervisor === sup)
-      .map(r => [r.dni, r])
-  ).values()].sort((a, b) => a.user.localeCompare(b.user));
-
-  const select = document.getElementById('promotor-select');
-  select.innerHTML = '<option value="">— Seleccioná un promotor —</option>';
-  promotores.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.dni;
-    opt.textContent = p.user + ' — DNI: ' + p.dni;
-    select.appendChild(opt);
-  });
+  poblarPromotorSelect(sup);
 
   document.getElementById('step-dni').classList.remove('hidden');
   document.getElementById('step-imeis').classList.add('hidden');
