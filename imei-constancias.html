@@ -52,6 +52,7 @@
   .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
   .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .imei-fecha { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .imei-fecha.sin-fecha { display: inline-block; font-size: 12px; font-weight: 800; color: #854d0e; background: #fef08a; padding: 4px 9px; border-radius: 6px; margin-top: 5px; }
   .imei-motivo { font-size: 11px; color: var(--ink2); margin-top: 6px; padding: 6px 8px; background: var(--bg); border-radius: 6px; line-height: 1.4; }
   .imei-motivo.rechazado { background: #fef2f2; color: #991b1b; }
   .imei-motivo.rechazado strong { color: var(--error); }
@@ -539,7 +540,7 @@ function mostrarIMEIs(imeis) {
   imeis.forEach((item, i) => {
     const info = constanciasStatus[item.imei];
     const estado = info?.estado || 'Pendiente';
-    const ultimaFoto = info?.fecha || 'Sin fecha';
+    const ultimaFoto = info?.fecha || 'Sin Fecha';
     const comentario = info?.comentario || '';
 
     if (filtroEstadoActual && estado !== filtroEstadoActual) return; // no coincide con el filtro
@@ -566,7 +567,7 @@ function mostrarIMEIs(imeis) {
         '<div class="imei-info">' +
           '<div class="imei-number">' + item.imei + '</div>' +
           '<div class="imei-meta">' + item.modelo + ' · ' + item.pos + (item.fecha ? ' · ' + parseFecha(item.fecha) : '') + '</div>' +
-          '<div class="imei-fecha">📷 Última foto: ' + ultimaFoto + '</div>' +
+          '<div class="imei-fecha' + (ultimaFoto === 'Sin Fecha' ? ' sin-fecha' : '') + '">📷 Última constancia cargada: ' + ultimaFoto + '</div>' +
           motivoHtml +
         '</div>' +
         '<span class="imei-status" style="background:' + statusBg + ';color:' + statusColor + '">' + estado + '</span>' +
