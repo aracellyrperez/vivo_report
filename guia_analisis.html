@@ -322,7 +322,7 @@ const PROCESSES = [
       {
         num: '01',
         title: 'Carga de promotores',
-        actor: 'Analista de VIVO',
+        actor: 'Practicante de VIVO',
         detail: 'El analista envía vía correo electrónico la data de carga de promotores a ARACNE / VWORK. Es el punto de partida: aquí se registra la base con la que va a trabajar todo el proceso.',
         action: null,
         expect: 'Revisar las ventas cargadas por tu promotor en el EXCEL_SO_PROMOTOR del mes.',
@@ -331,7 +331,7 @@ const PROCESSES = [
       {
         num: '02',
         title: 'Actualización de IMEIs observados',
-        actor: 'Analista de VIVO',
+        actor: 'Practicante de VIVO',
         detail: 'El analista actualiza la lista de IMEIs que quedaron observados en la venta de tus promotores.',
         reasons: [
           'IMEI activado en otro mes o no activado',
@@ -446,7 +446,7 @@ const PROCESSES = [
       {
         num: '04',
         title: 'Validación de carga y hora',
-        actor: 'Practicante Vivo',
+        actor: 'Practicante Salesland',
         detail: 'El practicante de Salesland valida que la carga se haya realizado y revisa la hora de envío. Si la información se envía después del horario establecido, se aplica un descuento automático sobre el porcentaje asignado a ese corte.',
         penaltyIntro: 'Regla general de penalización por retraso:',
         penaltyRules: [
@@ -483,6 +483,44 @@ const PROCESSES = [
         action: null,
         expect: null,
         timing: null
+      }
+    ]
+  },
+  {
+    id: 'vwork',
+    label: 'USUARIOS DE VWORK',
+    disabled: false,
+    steps: [
+      {
+        num: '00',
+        title: 'Información',
+        isInfo: true,
+        infoItems: [
+          { q: '¿Qué es un usuario de VWork?', a: 'Es el acceso que le permite a cada promotor ingresar a la plataforma VWork o VChat para cargar los IMEIs de sus ventas.' },
+          { q: '¿Para qué sirve?', a: 'Sin este usuario, el promotor no puede cargar sus IMEIs y esas ventas no se consideran en el pago de comisiones. El usuario debe incluir todos los POS que el promotor cubre en el mes en curso.' },
+          { q: '¿Qué datos se necesitan para crear o actualizar un usuario?', a: 'Nombre completo, DNI, POS que cubre en el mes, número telefónico, y fecha de ingreso y/o fecha de cese.' },
+          { q: '¿De dónde salen estos datos?', a: 'Todos salen de la data de COBERTURA que Eduardo Garnique envía diariamente. Contacto: eduardogarniqueg@salesland.net' }
+        ]
+      },
+      {
+        num: '01',
+        title: 'Creación o actualización de usuarios',
+        actor: 'Practicante de VIVO',
+        detail: 'Aleksey Chávez crea o actualiza la información del usuario dentro de los 2 días hábiles posteriores al ingreso del promotor en la cobertura.',
+        action: null,
+        expect: 'Se informa por correo la actualización de todos los usuarios.',
+        timing: 'Máximo 2 días hábiles desde el ingreso en cobertura'
+      },
+      {
+        num: '02',
+        title: 'Si el promotor tiene un dato errado',
+        actor: 'Supervisor',
+        detail: 'Puede ocurrir que un dato del promotor esté errado: nombre, DNI, POS, número telefónico o fechas de ingreso/cese.',
+        action: [
+          'Envía un correo a Eduardo Garnique (eduardogarniqueg@salesland.net) indicando el dato errado y el dato correcto.'
+        ],
+        expect: 'Una vez corregido el dato en la cobertura, Aleksey Chávez actualizará la información en un máximo de 2 días hábiles.',
+        timing: 'Máximo 2 días hábiles tras la corrección en cobertura'
       }
     ]
   },
