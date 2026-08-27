@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central de Procesos — Guía Operativa</title>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #f4f6ff; --bg2: #eaeefc; --surface: #ffffff; --border: #d4daff;
+    --ink: #0d1540; --ink2: #2d3a6e; --muted: #7a85b8; --accent: #1e46e6;
+    --good: #1a6b3a; --good-bg: #e8f5ed; --warn: #b87800; --warn-bg: #fef3d0;
+    --bad: #b3261e; --bad-bg: #fdeceb;
+
+    --role-vivo: #1e46e6;       --role-vivo-bg: rgba(30,70,230,.10);
+    --role-salesland: #6b2fb3;  --role-salesland-bg: rgba(107,47,179,.10);
+    --role-practicante: #52698f;--role-practicante-bg: rgba(82,105,143,.10);
+    --role-supervisor: #c0392b; --role-supervisor-bg: rgba(192,57,43,.10);
+    --role-referencia: #b8860b; --role-referencia-bg: rgba(184,134,11,.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Exo 2', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  .topbar{
+    background:#000; color:#fff; padding:12px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; z-index:100; flex-wrap:wrap; gap:8px;
+  }
+  .topbar-brand{ font-weight:800; font-size:15px; letter-spacing:.04em; display:flex; align-items:center; gap:10px;}
+  .topbar-brand .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent);}
+  .topbar-right{ font-size:12px; color:rgba(255,255,255,.55);}
+
+  .hero{
+    background:#000; color:#fff; padding:30px 24px 34px; position:relative; overflow:hidden;
+  }
+  .hero::after{ content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(30,70,230,.18) 0%, transparent 60%);}
+  .hero-inner{max-width:900px;margin:0 auto;position:relative;}
+  .hero h1{ font-weight:800; font-size:clamp(24px,4vw,36px); line-height:1.1; margin:0 0 8px;}
+  .hero h1 span{ color:#5c82ff;}
+  .hero p{ color:rgba(255,255,255,.55); font-size:14px; margin:0; max-width:60ch; line-height:1.5;}
+
+  .wrap{max-width:900px;margin:0 auto;padding:24px 20px 80px;}
+
+  /* ---- Process tabs ---- */
+  .tabs{ display:flex; gap:8px; margin:0 0 22px; flex-wrap:wrap;}
+  .tab{
+    background:var(--surface); border:1.5px solid var(--border); color:var(--muted);
+    font-family:'Exo 2', sans-serif; font-weight:700; font-size:13px;
+    padding:9px 18px; border-radius:9px; cursor:pointer; transition:all .15s;
+  }
+  .tab:hover{ border-color:var(--accent); color:var(--accent);}
+  .tab.active{ background:var(--accent); border-color:var(--accent); color:#fff;}
+  .tab[disabled]{ cursor:not-allowed; opacity:0.5;}
+  .tab[disabled]:hover{ border-color:var(--border); color:var(--muted);}
+
+  /* ---- Ticket stepper ---- */
+  .tracker{
+    display:flex; gap:0; overflow-x:auto; padding-bottom:8px; margin-bottom:6px; scrollbar-width:thin;
+  }
+  .ref-tracker.empty{ display:none; }
+  .stub{
+    flex:1 0 130px; min-width:130px; background:var(--surface); border:1.5px solid var(--border);
+    border-radius:12px; padding:14px 12px 12px; cursor:pointer; position:relative;
+    margin-right:10px; transition:border-color .15s, transform .15s, box-shadow .15s;
+  }
+  .stub:last-child{margin-right:0;}
+  .stub:hover{border-color:var(--accent);}
+  .stub.active{
+    border-color:var(--accent); background:#fff;
+    box-shadow:0 4px 14px rgba(30,70,230,.18);
+    transform:translateY(-2px);
+  }
+  .stub.info-stub{ background:var(--bg2); }
+  .stub.ref-stub{ border-left:4px solid var(--role-referencia); }
+  .stub.ref-stub.active{ border-color:var(--role-referencia); box-shadow:0 4px 14px rgba(184,134,11,.22);}
+  .stub.ref-stub.active .stub-num{ color:var(--role-referencia); }
+  .stub-num{ font-weight:800; font-size:22px; color:var(--border); min-height:26px; }
+  .stub.active .stub-num{color:var(--accent);}
+  .stub-title{ font-size:12.5px; font-weight:600; line-height:1.3; margin-top:6px; color:var(--ink);}
+  .stub-actor{
+    font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted); margin-top:8px; display:inline-block;
+    border-top:1px dashed var(--border); padding-top:6px; width:100%;
+  }
+  .stub-actor.role-vivo{ color:var(--role-vivo); }
+  .stub-actor.role-salesland{ color:var(--role-salesland); }
+  .stub-actor.role-practicante{ color:var(--role-practicante); }
+  .stub-actor.role-supervisor{ color:var(--role-supervisor); }
+  .stub-actor.role-referencia{ color:var(--role-referencia); }
+
+  .track-line{
+    height:3px;
+    background:repeating-linear-gradient(90deg, var(--border) 0 8px, transparent 8px 14px);
+    margin:0 0 24px;
+  }
+
+  /* ---- Detail panel ---- */
+  .panel{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:26px; position:relative; overflow:hidden;
+  }
+  .panel-head{
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    border-bottom:1px solid var(--bg2); padding-bottom:14px; margin-bottom:18px;
+  }
+  .panel-head h2{ font-size:20px; font-weight:800; margin:0;}
+  .panel-actor{
+    font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    background:var(--bg2); border:1px solid var(--border); padding:4px 10px;
+    border-radius:20px; color:var(--ink2); white-space:nowrap;
+  }
+  .panel-actor.role-vivo{ background:var(--role-vivo-bg); border-color:var(--role-vivo); color:var(--role-vivo); }
+  .panel-actor.role-salesland{ background:var(--role-salesland-bg); border-color:var(--role-salesland); color:var(--role-salesland); }
+  .panel-actor.role-practicante{ background:var(--role-practicante-bg); border-color:var(--role-practicante); color:var(--role-practicante); }
+  .panel-actor.role-supervisor{ background:var(--role-supervisor-bg); border-color:var(--role-supervisor); color:var(--role-supervisor); }
+  .panel-actor.role-referencia{ background:var(--role-referencia-bg); border-color:var(--role-referencia); color:var(--role-referencia); }
+
+  .block{margin-bottom:18px;}
+  .block:last-child{margin-bottom:0;}
+  .block-label{
+    font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:6px; display:block;
+  }
+  .block p{margin:0;line-height:1.6;font-size:15px;color:var(--ink);}
+  .block ul{margin:4px 0 0;padding-left:18px;line-height:1.6;font-size:15px;}
+  .block ul li{margin-bottom:4px;}
+
+  .timing{
+    display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:13px;
+    background:var(--warn-bg); border:1px solid var(--warn); color:var(--warn);
+    padding:5px 10px; border-radius:20px;
+  }
+
+  /* ---- direct link button ---- */
+  .link-cta{
+    display:inline-flex; align-items:center; gap:8px;
+    background:var(--accent); color:#fff; font-weight:800; font-size:14px;
+    padding:11px 20px; border-radius:999px; text-decoration:none;
+    box-shadow:0 6px 16px rgba(30,70,230,.3); transition:transform .15s, box-shadow .15s;
+  }
+  .link-cta:hover{ transform:translateY(-1px); box-shadow:0 10px 22px rgba(30,70,230,.4);}
+  .link-cta svg{flex-shrink:0;}
+  .link-note{ font-size:12px; color:var(--muted); margin-top:8px;}
+
+  /* ---- status chooser ---- */
+  .status-choice{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+  .status-btn{
+    font-weight:700; font-size:13px; padding:9px 16px; border-radius:20px; cursor:pointer;
+    border:1.5px solid var(--border); background:#fff; color:var(--muted);
+  }
+  .status-btn.aprobado.sel{border-color:var(--good);color:var(--good);background:var(--good-bg);}
+  .status-btn.rechazado.sel{border-color:var(--bad);color:var(--bad);background:var(--bad-bg);}
+
+  .stamp{
+    display:inline-block; font-weight:800; font-size:20px; letter-spacing:.04em; text-transform:uppercase;
+    padding:8px 18px; border:3px solid currentColor; border-radius:10px;
+    position:relative; margin-bottom:14px; animation: stamp-hit .25s ease-out;
+  }
+  .stamp.aprobado{color:var(--good); background:var(--good-bg);}
+  .stamp.rechazado{color:var(--bad); background:var(--bad-bg);}
+  @keyframes stamp-hit{
+    0%{transform:scale(1.15); opacity:0;}
+    60%{transform:scale(0.97); opacity:1;}
+    100%{transform:scale(1);}
+  }
+
+  /* ---- info step (00) ---- */
+  .info-item{ margin-bottom:16px; }
+  .info-item:last-child{ margin-bottom:0; }
+  .info-q{ font-weight:800; font-size:14px; color:var(--ink2); margin-bottom:4px; }
+  .info-a{ font-size:15px; line-height:1.6; color:var(--ink); }
+  .info-a.highlight{
+    display:inline-block; background:var(--warn-bg); border:1px solid var(--warn);
+    color:var(--warn); font-weight:700; padding:6px 12px; border-radius:8px;
+  }
+
+  .cortes-table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  .cortes-table th, .cortes-table td{
+    text-align:left; padding:8px 10px; font-size:13.5px; border-bottom:1px solid var(--bg2);
+  }
+  .cortes-table th{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  .cortes-table td.peso{ font-weight:800; color:var(--accent); }
+
+  /* ---- scenarios (protocolos) ---- */
+  .scenario{ border-left:3px solid var(--accent); padding:4px 0 4px 14px; margin-bottom:14px; }
+  .scenario:last-child{ margin-bottom:0; }
+  .scenario-title{ font-weight:800; font-size:14px; margin-bottom:4px; color:var(--ink);}
+  .scenario-text{ font-size:14px; line-height:1.55; color:var(--ink2); }
+
+  /* ---- formula diagram (regla de oro) ---- */
+  .formula-row{ display:flex; align-items:stretch; gap:8px; flex-wrap:wrap; margin:10px 0 4px; }
+  .formula-box{
+    flex:1 1 140px; background:var(--bg2); border:2px solid var(--accent); border-radius:10px;
+    padding:14px 12px; font-size:13px; font-weight:700; color:var(--ink);
+    display:flex; align-items:center; justify-content:center; text-align:center;
+  }
+  .formula-box.result{ border-color:var(--good); background:var(--good-bg); color:var(--good); }
+  .formula-op{
+    flex:0 0 26px; display:flex; align-items:center; justify-content:center;
+    font-size:22px; font-weight:800; color:var(--accent);
+  }
+  @media (max-width:640px){ .formula-op{ flex-basis:100%; } }
+
+  /* ---- fotos section ---- */
+  .fotos-section{ margin-top:30px; }
+  .fotos-block{ margin-bottom:30px; }
+  .fotos-block:last-child{ margin-bottom:0; }
+  .fotos-title-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+  .fotos-title{ font-size:15px; font-weight:800; color:var(--ink); display:flex; align-items:center; gap:8px; }
+  .fotos-title .dot-r{ width:9px; height:9px; border-radius:50%; background:var(--bad); }
+  .fotos-title .dot-a{ width:9px; height:9px; border-radius:50%; background:var(--good); }
+  .mini-refresh{
+    background:var(--surface); border:1.5px solid var(--border); color:var(--muted);
+    font-family:'Exo 2', sans-serif; font-weight:700; font-size:11.5px;
+    padding:6px 12px; border-radius:20px; cursor:pointer;
+  }
+  .mini-refresh:hover{ border-color:var(--accent); color:var(--accent); }
+  .fotos-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .foto-card{
+    background:var(--surface); border:1.5px solid var(--border); border-radius:10px;
+    overflow:hidden; display:flex; flex-direction:column;
+  }
+  .foto-card.rechazado{ border-color:var(--bad); }
+  .foto-card.aprobado{ border-color:var(--good); }
+  .foto-img-wrap{ position:relative; width:100%; aspect-ratio:4/3; background:var(--bg2); }
+  .foto-img-wrap img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .foto-fallback{
+    display:none; position:absolute; inset:0; align-items:center; justify-content:center;
+    font-size:11px; color:var(--muted); text-align:center; padding:8px; background:var(--bg2);
+  }
+  .foto-body{ padding:8px 10px; font-size:12px; line-height:1.4; color:var(--ink2); }
+  .foto-pending{
+    aspect-ratio:4/3; display:flex; align-items:center; justify-content:center;
+    background:var(--bg2); color:var(--muted); font-size:12px; text-align:center; padding:10px;
+  }
+  .fotos-empty, .fotos-state{ font-size:13px; color:var(--muted); padding:10px 2px; }
+  .fotos-state.error{ color:var(--bad); }
+
+  .hidden{display:none;}
+
+  footer{
+    margin-top:36px; font-size:11.5px; color:var(--muted); text-align:center;
+  }
+
+  a.action-link{color:var(--accent);font-weight:700;text-decoration:underline;}
+
+  :focus-visible{outline:3px solid var(--accent); outline-offset:2px;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-brand"><div class="dot"></div> Central de Procesos</div>
+  <div class="topbar-right">Guía operativa para supervisores</div>
+</div>
+
+<div class="hero">
+  <div class="hero-inner">
+    <h1>Cómo va <span>tu proceso</span></h1>
+    <p>Elige el proceso y el paso en el que estás. Vas a ver qué está pasando, qué te toca hacer y qué debes esperar.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="tracker" id="tracker"></div>
+  <div class="tracker ref-tracker" id="ref-tracker"></div>
+  <div class="track-line"></div>
+
+  <div class="panel" id="panel"></div>
+
+  <div class="fotos-section" id="fotos-section" style="display:none">
+    <div class="fotos-block">
+      <div class="fotos-title-row">
+        <div class="fotos-title"><span class="dot-r"></span> Fotos rechazadas</div>
+        <button class="mini-refresh" id="btn-refresh-fotos">↻ Actualizar</button>
+      </div>
+      <div id="fotos-rechazadas-grid"></div>
+    </div>
+    <div class="fotos-block">
+      <div class="fotos-title-row">
+        <div class="fotos-title"><span class="dot-a"></span> Fotos aprobadas</div>
+      </div>
+      <div id="fotos-aprobadas-grid"></div>
+    </div>
+  </div>
+
+  <footer>Actualizado para el proceso vigente · si algo no coincide con tu caso, avisa a tu analista de soporte</footer>
+</div>
+
+<script>
+const PROCESSES = [
+  {
+    id: 'imeis',
+    label: 'CARGA DE IMEIS',
+    disabled: false,
+    steps: [
+      {
+        num: '00',
+        title: 'Información',
+        isInfo: true,
+        infoItems: [
+          { q: '¿Qué es CARGA DE IMEIS?', a: 'Proceso donde el promotor o supervisor carga los IMEIs de sus ventas.' },
+          { q: '¿Para qué sirve?', a: 'Esta información se utiliza para el pago de comisiones del mes.' },
+          { q: 'Fecha máxima de entrega de constancias de venta', a: '2026-09-07, 12:00 p.m. (mediodía)', highlight: true },
+          { q: '¿Qué debe verse en la constancia de venta?', a: 'Debe verse claramente: Fecha de venta, IMEI y la cuenta (CLARO, PLAZA VEA, ENTEL, etc.).' },
+          { q: '¿Qué pasa si no llegas a la fecha límite?', a: 'El IMEI no se considera en el pago de comisiones del mes, lo que puede provocar que el promotor no cobre esa venta.' },
+          { q: '¿A quién contactar si tienes dudas sobre un IMEI observado?', a: 'Carlos Fernández — carlosfernandez@salesland.net' }
+        ]
+      },
+      {
+        num: '01',
+        title: 'Carga de promotores',
+        actor: 'Analista de VIVO',
+        detail: 'El analista envía vía correo electrónico la data de carga de promotores a ARACNE / VWORK. Es el punto de partida: aquí se registra la base con la que va a trabajar todo el proceso.',
+        action: null,
+        expect: 'Revisar las ventas cargadas por tu promotor en el EXCEL_SO_PROMOTOR del mes.',
+        timing: null
+      },
+      {
+        num: '02',
+        title: 'Actualización de IMEIs observados',
+        actor: 'Analista de VIVO',
+        detail: 'El analista actualiza la lista de IMEIs que quedaron observados en la venta de tus promotores.',
+        reasons: [
+          'IMEI activado en otro mes o no activado',
+          'IMEI cargado el mes en curso por otro promotor',
+          'IMEI cargado por el mismo promotor otro mes',
+          'IMEI de otra cuenta'
+        ],
+        action: null,
+        expect: 'Si tu equipo tiene IMEIs observados, debes ir al PASO 3. En caso contrario, ¿qué pasa?',
+        timing: null
+      },
+      {
+        num: '03',
+        title: 'Carga de constancia',
+        actor: 'Supervisor',
+        detail: 'Se habilita un link donde debes cargar la constancia de venta del IMEI observado, con los siguientes datos visibles: CUENTA, FECHA DE VENTA, IMEI.',
+        action: [
+          'Sube la constancia de venta correspondiente al IMEI observado.',
+          'Verifica que la carga quede confirmada antes de salir.'
+        ],
+        link: 'https://aracellyrperez.github.io/vivo_report/imei-constancias.html',
+        expect: 'El sistema debe confirmarte que el archivo se subió correctamente. Guarda el cargo o captura de esa confirmación.',
+        timing: null
+      },
+      {
+        num: '04',
+        title: 'Validación de la constancia',
+        actor: 'Analista Salesland',
+        detail: 'Se valida que la constancia cargada tenga los datos mínimos solicitados en el PASO 3.',
+        action: ['No necesitas hacer nada mientras el ticket esté en Pendiente. Solo espera la respuesta dentro del plazo.'],
+        expect: 'Mientras se valida, el ticket figura como Pendiente. El resultado (aprobado o rechazado) se informa en un máximo de 2 días hábiles.',
+        timing: 'Máximo 2 días hábiles'
+      },
+      {
+        num: '05',
+        title: 'Resultado de la validación',
+        actor: 'Analista Salesland',
+        detail: null,
+        expect: null,
+        action: null,
+        timing: null,
+        hasStatus: true
+      },
+      {
+        num: '06',
+        title: 'Cierre de ticket',
+        actor: 'Sistema',
+        detail: 'El ticket se cierra formalmente, ya sea como aprobado o como rechazado, según el resultado del paso anterior.',
+        action: null,
+        expect: 'No se requiere ninguna acción adicional de tu parte una vez cerrado.',
+        timing: null
+      }
+    ]
+  },
+  {
+    id: 'sosk',
+    label: 'CARGA DIARIA DE SO/SK',
+    disabled: false,
+    steps: [
+      {
+        num: '00',
+        title: 'Información',
+        isInfo: true,
+        infoItems: [
+          { q: '¿Qué es CARGA DIARIA DE SO/SK?', a: 'Proceso donde el supervisor carga las ventas y el stock totales realizados por su personal, en 3 cortes, por punto de venta (POS) y modelo.' },
+          { q: '¿Para qué sirve?', a: 'Esta información se utiliza para los reportes de performance que se envían a la gerencia de VIVO.' },
+          { q: '¿Qué significan las siglas SO y SK?', a: 'SO = Sell Out (ventas realizadas). SK = Stock (inventario disponible).' },
+          { q: '¿A quién contactar si el link no carga o falla?', a: 'Carlos Fernández — carlosfernandez@salesland.net' }
+        ],
+        cortes: [
+          { name: 'Corte 1 (solo SO)', time: '2:30 p.m. – 3:30 p.m.', weight: '10%' },
+          { name: 'Corte 2 (solo SO)', time: '5:30 p.m. – 6:30 p.m.', weight: '30%' },
+          { name: 'Corte 3 (SO y SK)', time: '12:00 p.m. del día siguiente', weight: '60%' }
+        ]
+      },
+      {
+        num: '01',
+        title: 'Ingresar al link',
+        actor: 'Supervisor',
+        detail: 'Debes ingresar al link de carga diaria de SO y stock.',
+        action: ['Ingresa al link de carga.'],
+        link: 'https://aracellyrperez.github.io/vivo_report/',
+        expect: 'El sistema te mostrará los filtros disponibles según tu cobertura.',
+        timing: null
+      },
+      {
+        num: '02',
+        title: 'Cargar la información',
+        actor: 'Supervisor',
+        detail: 'Escoges los filtros correspondientes para cargar el SO y/o el stock: corte, POS y modelo.',
+        action: [
+          'Selecciona el corte, el POS y el modelo.',
+          'Ingresa las cantidades de SO y/o stock según corresponda.'
+        ],
+        expect: null,
+        timing: null,
+        formula: true,
+        formulaIntro: 'Si no cuentas con el conteo físico exacto de stock para el corte 3, usa esta regla de oro para calcularlo:'
+      },
+      {
+        num: '03',
+        title: 'Enviar la información',
+        actor: 'Supervisor',
+        detail: 'Una vez completados los datos, se envía la información para su validación.',
+        action: [
+          'Revisa que los datos estén completos antes de enviar.',
+          'Envía la información dentro del horario del corte correspondiente.'
+        ],
+        expect: 'La hora de tu envío queda registrada; de eso depende la penalización si hay retraso (ver PASO 4).',
+        timing: null
+      },
+      {
+        num: '04',
+        title: 'Validación de carga y hora',
+        actor: 'Practicante Salesland',
+        detail: 'El practicante de Salesland valida que la carga se haya realizado y revisa la hora de envío. Si la información se envía después del horario establecido, se aplica un descuento automático sobre el porcentaje asignado a ese corte.',
+        penaltyIntro: 'Regla general de penalización por retraso:',
+        penaltyRules: [
+          'Descuento por minuto: se descuenta 2% del porcentaje asignado al corte por cada minuto de retraso.',
+          'Límite de tolerancia: a partir de 50 minutos de retraso, la calificación del corte pasa a ser 0% automáticamente.'
+        ],
+        action: null,
+        expect: 'No necesitas hacer nada en este paso; el descuento (si aplica) se calcula automáticamente.',
+        timing: null
+      },
+      {
+        num: '05',
+        title: 'Validación de la información',
+        actor: 'Analista Salesland',
+        detail: 'El analista de Salesland valida que la información cargada sea correcta.',
+        action: null,
+        expect: 'Si hay alguna inconsistencia, te contactarán para corregirla.',
+        timing: null
+      },
+      {
+        num: '',
+        title: 'Protocolos y situaciones especiales',
+        actor: 'Referencia',
+        isReference: true,
+        noNum: true,
+        detail: 'Estas son las situaciones especiales más comunes y cómo proceder en cada una. Como regla general: es preferible un envío tardío a una omisión total, y los datos deben ser completos, correctos y consistentes.',
+        scenarios: [
+          { title: 'Envío errado o incompleto', text: 'Corrige cualquier error apenas lo detectes. El stock reportado debe ser coherente con las ventas del día, el SK del día anterior y los ingresos de mercadería registrados. Si un POS recibe abastecimiento durante el día, ese ingreso debe reflejarse en el reporte de cierre. Si la información enviada es incorrecta, la calificación del corte puede ser 0%.' },
+          { title: 'Salidas a ruta o viajes', text: 'Si tienes previsto viajar al día siguiente, envía la información con anticipación o al cierre de la jornada previa, para prevenir falta de señal u otras contingencias.' },
+          { title: 'Reuniones de urgencia', text: 'Si una reunión urgente con GTM, FFM o Promotoría interfiere con el horario de carga, comunica previamente la hora aproximada en que enviarás la información.' },
+          { title: 'Situaciones excepcionales', text: 'Ante eventos externos como cortes de energía o accidentes, notifica oportunamente al GTM (City) para solicitar soporte.' },
+          { title: 'El POS no figura en el link', text: 'Si tienes ventas en un POS que está dentro de tu cobertura pero no aparece en el enlace, informa a Carlos Fernández. El enlace se actualiza según la última cobertura enviada por Salesland: si el POS no está en la cobertura, no se puede agregar al enlace.' }
+        ],
+        action: null,
+        expect: null,
+        timing: null
+      }
+    ]
+  },
+  {
+    id: 'placeholder',
+    label: '+ Agregar otro proceso',
+    disabled: true
+  }
+];
+
+let currentProcess = PROCESSES[0];
+let currentStepIdx = 0;
+let currentStatus = null; // 'aprobado' | 'rechazado'
+
+const tabsEl = document.getElementById('tabs');
+const trackerEl = document.getElementById('tracker');
+const refTrackerEl = document.getElementById('ref-tracker');
+const panelEl = document.getElementById('panel');
+const fotosSectionEl = document.getElementById('fotos-section');
+
+function roleClass(actor){
+  if (!actor) return '';
+  const a = actor.toLowerCase();
+  if (a.includes('vivo') && a.includes('analista')) return 'role-vivo';
+  if (a.includes('salesland') && a.includes('analista')) return 'role-salesland';
+  if (a.includes('practicante')) return 'role-practicante';
+  if (a === 'supervisor') return 'role-supervisor';
+  if (a === 'referencia') return 'role-referencia';
+  return '';
+}
+
+function renderTabs(){
+  tabsEl.innerHTML = '';
+  PROCESSES.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (p.id === currentProcess.id ? ' active' : '');
+    btn.textContent = p.label;
+    if (p.disabled) {
+      btn.disabled = true;
+      btn.title = 'Próximamente: cada nuevo proceso se agrega aquí como una pestaña más.';
+    } else {
+      btn.addEventListener('click', () => {
+        currentProcess = p;
+        currentStepIdx = 0;
+        currentStatus = null;
+        renderAll();
+      });
+    }
+    tabsEl.appendChild(btn);
+  });
+}
+
+function buildStub(step, i){
+  const stub = document.createElement('div');
+  stub.className = 'stub' + (i === currentStepIdx ? ' active' : '') + (step.isInfo ? ' info-stub' : '') + (step.isReference ? ' ref-stub' : '');
+  stub.setAttribute('role','button');
+  stub.setAttribute('tabindex','0');
+  const rc = roleClass(step.actor);
+  stub.innerHTML = `
+    <div class="stub-num">${step.noNum ? '' : step.num}</div>
+    <div class="stub-title">${step.title}</div>
+    ${step.actor ? `<span class="stub-actor ${rc}">${step.actor}</span>` : ''}
+  `;
+  stub.addEventListener('click', () => { currentStepIdx = i; renderAll(); });
+  stub.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' '){ currentStepIdx = i; renderAll(); }});
+  return stub;
+}
+
+function renderTracker(){
+  trackerEl.innerHTML = '';
+  refTrackerEl.innerHTML = '';
+  let refCount = 0;
+  currentProcess.steps.forEach((step, i) => {
+    const stub = buildStub(step, i);
+    if (step.isReference) { refTrackerEl.appendChild(stub); refCount++; }
+    else trackerEl.appendChild(stub);
+  });
+  refTrackerEl.classList.toggle('empty', refCount === 0);
+}
+
+function formulaHtml(){
+  return `
+    <div class="formula-row">
+      <div class="formula-box">El SK que tenías antes de ayer</div>
+      <div class="formula-op">+</div>
+      <div class="formula-box">Lo que te llegó de SK ayer</div>
+      <div class="formula-op">−</div>
+      <div class="formula-box">Lo que vendiste ayer</div>
+      <div class="formula-op">=</div>
+      <div class="formula-box result">SK que tienes ayer</div>
+    </div>
+  `;
+}
+
+function renderPanel(){
+  const step = currentProcess.steps[currentStepIdx];
+  const rc = roleClass(step.actor);
+  const headTitle = step.noNum ? step.title : `${step.num} — ${step.title}`;
+
+  if (step.isInfo) {
+    panelEl.innerHTML = `
+      <div class="panel-head">
+        <h2>${headTitle}</h2>
+      </div>
+      ${step.infoItems.map(item => `
+        <div class="info-item">
+          <div class="info-q">${item.q}</div>
+          <div class="info-a${item.highlight ? ' highlight' : ''}">${item.a}</div>
+        </div>
+      `).join('')}
+      ${step.cortes ? `
+        <div class="block" style="margin-top:20px">
+          <span class="block-label">Fecha máxima de carga por corte</span>
+          <table class="cortes-table">
+            <thead><tr><th>Corte</th><th>Horario</th><th>Participación</th></tr></thead>
+            <tbody>
+              ${step.cortes.map(c => `<tr><td>${c.name}</td><td>${c.time}</td><td class="peso">${c.weight}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
+    `;
+    return;
+  }
+
+  if (step.hasStatus) {
+    panelEl.innerHTML = `
+      <div class="panel-head">
+        <h2>${headTitle}</h2>
+        <span class="panel-actor ${rc}">${step.actor}</span>
+      </div>
+      <div class="block">
+        <span class="block-label">¿Qué resultado te informaron?</span>
+        <div class="status-choice">
+          <button class="status-btn aprobado" data-status="aprobado">Aprobado</button>
+          <button class="status-btn rechazado" data-status="rechazado">Rechazado</button>
+        </div>
+      </div>
+      <div id="status-result"></div>
+    `;
+    const buttons = panelEl.querySelectorAll('.status-btn');
+    buttons.forEach(b => {
+      if (b.dataset.status === currentStatus) b.classList.add('sel');
+      b.addEventListener('click', () => {
+        currentStatus = b.dataset.status;
+        renderPanel();
+      });
+    });
+    renderStatusResult();
+    return;
+  }
+
+  panelEl.innerHTML = `
+    <div class="panel-head">
+      <h2>${headTitle}</h2>
+      ${step.actor ? `<span class="panel-actor ${rc}">${step.actor}</span>` : ''}
+    </div>
+    ${step.timing ? `<div class="block"><span class="timing">⏱ ${step.timing}</span></div>` : ''}
+
+    <div class="block">
+      <span class="block-label">Qué está pasando</span>
+      <p>${step.detail}</p>
+    </div>
+
+    ${step.reasons ? `
+    <div class="block">
+      <span class="block-label">Motivos de observación del IMEI</span>
+      <ul>${step.reasons.map(r => `<li>${r}</li>`).join('')}</ul>
+    </div>` : ''}
+
+    ${step.penaltyRules ? `
+    <div class="block">
+      <span class="block-label">Penalización por retraso</span>
+      ${step.penaltyIntro ? `<p style="margin-bottom:6px">${step.penaltyIntro}</p>` : ''}
+      <ul>${step.penaltyRules.map(r => `<li>${r}</li>`).join('')}</ul>
+    </div>` : ''}
+
+    ${step.scenarios ? `
+    <div class="block">
+      <span class="block-label">Situaciones especiales</span>
+      ${step.scenarios.map(s => `
+        <div class="scenario">
+          <div class="scenario-title">${s.title}</div>
+          <div class="scenario-text">${s.text}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    ${step.formula ? `
+    <div class="block">
+      <span class="block-label">Esquema de validación de stock</span>
+      ${step.formulaIntro ? `<p style="margin-bottom:6px">${step.formulaIntro}</p>` : ''}
+      ${formulaHtml()}
+    </div>` : ''}
+
+    ${step.action ? `
+    <div class="block">
+      <span class="block-label">Qué debes hacer</span>
+      <ul>${step.action.map(a => `<li>${a}</li>`).join('')}</ul>
+    </div>` : ''}
+
+    ${step.link ? `
+    <div class="block">
+      <a class="link-cta" href="${step.link}" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+        Ir al link
+      </a>
+      <div class="link-note">Se abre en una pestaña nueva.</div>
+    </div>` : ''}
+
+    ${step.expect ? `
+    <div class="block">
+      <span class="block-label">Qué debes esperar</span>
+      <p>${step.expect}</p>
+    </div>` : ''}
+  `;
+}
+
+function renderStatusResult(){
+  const target = document.getElementById('status-result');
+  if (!currentStatus) { target.innerHTML = ''; return; }
+
+  if (currentStatus === 'aprobado') {
+    target.innerHTML = `
+      <div class="stamp aprobado">Aprobado</div>
+      <div class="block">
+        <span class="block-label">Qué pasa ahora</span>
+        <p>El ticket se cierra como aprobado. No necesitas hacer nada más.</p>
+      </div>
+    `;
+  } else {
+    target.innerHTML = `
+      <div class="stamp rechazado">Rechazado</div>
+      <div class="block">
+        <span class="block-label">Qué debes hacer</span>
+        <ul>
+          <li>Si tienes otra constancia de venta correcta para ese IMEI, vuelve al paso 3 y cárgala.</li>
+          <li>Si no puedes conseguir una constancia válida, envía un correo a tu jefe directo solicitando la aprobación del caso.</li>
+        </ul>
+      </div>
+    `;
+  }
+}
+
+/* ═════════ Fotos rechazadas / aprobadas — lectura en vivo del Sheet ═════════ */
+const FOTOS_SHEET_ID = '1zG2FPWytGCSbhXblBRe1t6L23lWm0YAKjh3eBnzjqEA';
+const FOTOS_GID = '1381062239';
+
+let fotosRows = null;
+let fotosLoading = false;
+let fotosError = null;
+let fotosCbSeq = 0;
+
+function fetchFotosGviz(){
+  return new Promise((resolve, reject) => {
+    const cbName = `__fotosCb${fotosCbSeq++}`;
+    const timeoutId = setTimeout(() => { cleanup(); reject(new Error('Tiempo de espera agotado leyendo el Sheet de fotos.')); }, 15000);
+    function cleanup(){ clearTimeout(timeoutId); delete window[cbName]; if (script.parentNode) script.parentNode.removeChild(script); }
+    window[cbName] = function(json){
+      cleanup();
+      if (json.status === 'error') { reject(new Error('Google Sheets respondió con error al leer las fotos.')); return; }
+      resolve(json.table);
+    };
+    const url = `https://docs.google.com/spreadsheets/d/${FOTOS_SHEET_ID}/gviz/tq?tqx=out:json;responseHandler:${cbName}&gid=${FOTOS_GID}&headers=1`;
+    const script = document.createElement('script');
+    script.src = url;
+    script.onerror = () => { cleanup(); reject(new Error('No se pudo cargar el Sheet de fotos.')); };
+    document.head.appendChild(script);
+  });
+}
+
+function normalizeHeader(s){ return String(s || '').trim().toLowerCase(); }
+function cellText(row, i){
+  if (i === -1 || !row.c[i]) return '';
+  const c = row.c[i];
+  return String(c.f !== undefined ? c.f : (c.v !== undefined ? c.v : '')).trim();
+}
+
+function parseFotos(table){
+  const labels = table.cols.map(c => normalizeHeader(c.label));
+  
+  // Mapeo corregido según los encabezados reales de tu Sheet
+  const iTipo = labels.findIndex(l => l === 'estado' || l === 'tipo');
+  const iLink = labels.findIndex(l => l === 'foto' || l === 'link');
+  const iMotivo = labels.findIndex(l => l.includes('comentario') || l.includes('motivo'));
+
+  return table.rows.map(r => ({
+    tipo: cellText(r, iTipo),
+    link: cellText(r, iLink),
+    motivo: cellText(r, iMotivo)
+  })).filter(r => r.tipo);
+}
+
+function esPendiente(v){
+  return !v || normalizeHeader(v) === 'pendiente' || normalizeHeader(v) === '';
+}
+
+function driveImgSrc(url){
+  if (esPendiente(url)) return null;
+  const m = url.match(/\/d\/([a-zA-Z0-9_-]{15,})/) || url.match(/[?&]id=([a-zA-Z0-9_-]{15,})/);
+  if (!m) return null;
+  return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`;
+}
+
+function fotoCardHtml(row, kind){
+  const imgSrc = driveImgSrc(row.link);
+  const motivoHtml = (kind === 'rechazado')
+    ? `<div class="foto-body"><strong>Motivo:</strong> ${esPendiente(row.motivo) ? 'Pendiente' : row.motivo}</div>`
+    : '';
+
+  if (!imgSrc) {
+    return `
+      <div class="foto-card ${kind}">
+        <div class="foto-pending">Constancia pendiente de subir</div>
+        ${motivoHtml}
+      </div>`;
+  }
+
+  return `
+    <div class="foto-card ${kind}">
+      <div class="foto-img-wrap">
+        <img src="${imgSrc}" alt="Constancia" loading="lazy"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <div class="foto-fallback">Vista previa no disponible</div>
+      </div>
+      ${motivoHtml}
+    </div>`;
+}
+
+function renderFotosGrid(elId, rows, kind){
+  const el = document.getElementById(elId);
+  if (!rows.length) { el.innerHTML = `<div class="fotos-empty">No hay fotos ${kind === 'rechazado' ? 'rechazadas' : 'aprobadas'} por ahora.</div>`; return; }
+  el.innerHTML = `<div class="fotos-grid">${rows.map(r => fotoCardHtml(r, kind)).join('')}</div>`;
+}
+
+function renderFotosState(msg, isError){
+  const html = `<div class="fotos-state${isError ? ' error' : ''}">${msg}</div>`;
+  document.getElementById('fotos-rechazadas-grid').innerHTML = html;
+  document.getElementById('fotos-aprobadas-grid').innerHTML = '';
+}
+
+function renderFotos(){
+  if (fotosLoading) { renderFotosState('Cargando fotos…', false); return; }
+  if (fotosError) { renderFotosState(`No se pudo cargar: ${fotosError}`, true); return; }
+  if (!fotosRows) { renderFotosState('Cargando fotos…', false); return; }
+
+  // .slice(0, 5) limita el resultado a un máximo de 5 fotos por categoría
+  const rechazadas = fotosRows.filter(r => normalizeHeader(r.tipo) === 'rechazado').slice(0, 5);
+  const aprobadas = fotosRows.filter(r => normalizeHeader(r.tipo) === 'aprobado').slice(0, 5);
+
+  renderFotosGrid('fotos-rechazadas-grid', rechazadas, 'rechazado');
+  renderFotosGrid('fotos-aprobadas-grid', aprobadas, 'aprobado');
+}
+
+async function loadFotos(force){
+  if (fotosLoading) return;
+  if (fotosRows && !force) { renderFotos(); return; }
+  fotosLoading = true; fotosError = null;
+  renderFotos();
+  try {
+    const table = await fetchFotosGviz();
+    fotosRows = parseFotos(table);
+  } catch (err) {
+    fotosError = err.message;
+  }
+  fotosLoading = false;
+  renderFotos();
+}
+
+document.getElementById('btn-refresh-fotos').addEventListener('click', () => loadFotos(true));
+
+function renderAll(){
+  renderTabs();
+  renderTracker();
+  renderPanel();
+  if (currentProcess.id === 'imeis') {
+    fotosSectionEl.style.display = 'block';
+    loadFotos(false);
+  } else {
+    fotosSectionEl.style.display = 'none';
+  }
+}
+
+renderAll();
+</script>
+</body>
+</html>
