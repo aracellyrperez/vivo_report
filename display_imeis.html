@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte VIVO — Formulario Supervisor</title>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f6ff;
+  --bg2: #eaeefc;
+  --surface: #ffffff;
+  --border: #d4daff;
+  --ink: #0d1540;
+  --ink2: #2d3a6e;
+  --muted: #7a85b8;
+  --accent: #1e46e6;
+  --so: #1a6b3a;
+  --so-bg: #e8f5ed;
+  --so-border: #a8d5b5;
+  --warn: #b87800;
+  --err: #b91c1c;
+  --err-bg: #fdeaea;
+  --err-border: #f3b4b4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Exo 2', sans-serif;
+  min-height: 100vh;
+  padding: 0 0 80px;
+}
+.topbar {
+  background: #000000;
+  color: #fff;
+  padding: 10px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-brand { font-weight: 800; font-size: 15px; letter-spacing: 0.04em; display: flex; align-items: center; gap: 10px; }
+.topbar-brand .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.6); }
+.topbar-date { font-size: 12px; color: rgba(255,255,255,0.4); }
+.hero {
+  background: #000000;
+  color: #fff;
+  padding: 40px 40px 46px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(30,70,230,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+.hero h1 { font-weight: 800; font-size: clamp(24px, 4vw, 38px); line-height: 1.1; margin-bottom: 8px; }
+.hero h1 span { color: #1e46e6; }
+.hero p { color: rgba(255,255,255,0.45); font-size: 14px; }
+.main { max-width: 720px; margin: 0 auto; padding: 32px 24px 0; }
+.section-label {
+  font-weight: 700; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+}
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 28px; }
+.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+.field:last-child { margin-bottom: 0; }
+label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.req { color: var(--accent); }
+input[type="text"], select, textarea {
+  background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; color: var(--ink);
+  font-family: 'Exo 2', sans-serif; font-size: 14px; font-weight: 500; padding: 11px 13px;
+  outline: none; transition: border-color 0.2s, box-shadow 0.2s; width: 100%;
+}
+textarea { resize: vertical; min-height: 70px; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(30,70,230,0.1); }
+input:disabled, select:disabled { opacity: 0.6; }
+
+.lookup-box {
+  margin-top: 8px; padding: 10px 13px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  display: none; align-items: center; gap: 8px;
+}
+.lookup-box.show { display: flex; }
+.lookup-box.ok { background: var(--so-bg); border: 1px solid var(--so-border); color: var(--so); }
+.lookup-box.notfound { background: var(--err-bg); border: 1px solid var(--err-border); color: var(--err); }
+.lookup-box.loading { background: var(--bg2); border: 1px solid var(--border); color: var(--muted); }
+.lookup-sub { font-weight: 500; color: var(--ink2); font-size: 12px; margin-top: 2px; }
+.hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.submit-bar { display: flex; gap: 12px; }
+.btn-submit {
+  flex: 1; padding: 15px 28px; background: #1e46e6; color: #fff; border: none; border-radius: 10px;
+  font-family: 'Exo 2', sans-serif; font-weight: 700; font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s;
+}
+.btn-submit:hover { background: #1535c0; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(30,70,230,0.35); }
+.btn-submit:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-clear {
+  padding: 15px 18px; background: transparent; border: 1.5px solid var(--border); border-radius: 10px;
+  font-family: 'Exo 2', sans-serif; font-size: 13px; color: var(--muted); cursor: pointer; transition: all 0.2s;
+}
+.btn-clear:hover { border-color: var(--accent); color: var(--accent); }
+
+.error-banner {
+  display: none; background: var(--err-bg); border: 1px solid var(--err-border); color: var(--err);
+  border-radius: 8px; padding: 12px 14px; font-size: 13px; font-weight: 600; margin-bottom: 18px;
+}
+.error-banner.show { display: block; }
+
+.config-banner {
+  display: none; background: #fff4e8; border: 1px solid #f5d080; color: #7a3a00;
+  border-radius: 8px; padding: 12px 14px; font-size: 13px; font-weight: 600; margin-bottom: 18px; line-height: 1.6;
+}
+.config-banner.show { display: block; }
+.config-banner code { background: rgba(0,0,0,0.08); padding: 1px 5px; border-radius: 4px; }
+
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(13, 21, 64, 0.55); z-index: 999;
+  align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(2px);
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; width: 100%;
+  max-width: 480px; animation: modalIn 0.25s ease both; overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.modal-header { background: #000; color: #fff; padding: 20px 24px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.modal-header-icon {
+  width: 36px; height: 36px; border-radius: 8px; background: rgba(30,70,230,0.3); border: 1px solid rgba(30,70,230,0.5);
+  display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+}
+.modal-header h3 { font-weight: 800; font-size: 16px; margin-bottom: 2px; }
+.modal-header p { font-size: 12px; color: rgba(255,255,255,0.45); }
+.modal-body { padding: 22px 24px; overflow-y: auto; }
+.confirm-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+.confirm-row:last-child { border-bottom: none; }
+.confirm-row .k { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.confirm-row .v { font-size: 14px; font-weight: 600; color: var(--ink); text-align: right; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--bg); flex-shrink: 0; }
+.btn-modal-cancel {
+  padding: 12px 20px; background: transparent; border: 1.5px solid var(--border); border-radius: 9px;
+  font-family: 'Exo 2', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+}
+.btn-modal-cancel:hover { border-color: var(--ink2); color: var(--ink); }
+.btn-modal-confirm {
+  flex: 1; padding: 12px 20px; background: var(--so); color: #fff; border: none; border-radius: 9px;
+  font-family: 'Exo 2', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-modal-confirm:hover { background: #145530; }
+.btn-modal-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.success-screen {
+  display: none; max-width: 480px; margin: 60px auto; padding: 44px 36px; background: var(--surface);
+  border: 1.5px solid var(--border); border-radius: 16px; text-align: center;
+}
+.success-screen.show { display: block; }
+.success-icon {
+  width: 68px; height: 68px; border-radius: 50%; background: var(--so-bg); border: 2px solid var(--so-border);
+  display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 20px;
+}
+.success-screen h2 { font-weight: 800; font-size: 22px; margin-bottom: 8px; }
+.success-screen p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.btn-new {
+  margin-top: 20px; padding: 11px 26px; background: #1e46e6; color: #fff; border: none; border-radius: 8px;
+  font-family: 'Exo 2', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.btn-new:hover { background: #1535c0; }
+
+.spinner {
+  width: 13px; height: 13px; border: 2px solid rgba(122,133,184,0.3); border-top-color: var(--muted);
+  border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 480px) {
+  .hero { padding: 30px 20px; }
+  .main { padding: 20px 14px 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand"><div class="dot"></div> VIVO — Portal de Reportes</div>
+  <div class="topbar-date" id="topbar-date"></div>
+</div>
+
+<div class="hero">
+  <h1>Formulario<br><span>Supervisor</span></h1>
+  <p>Registrá la asignación de equipo IMEI por promotor.</p>
+</div>
+
+<div class="main" id="main-form">
+
+  <div class="config-banner" id="config-banner">
+    ⚠️ Falta configurar la URL de la API. Editá la constante <code>API_URL</code> al final de este archivo con la URL de tu implementación de Apps Script (termina en <code>/exec</code>).
+  </div>
+  <div class="error-banner" id="error-banner"></div>
+
+  <div class="section-label">01 — Promotor</div>
+  <div class="card">
+    <div class="field">
+      <label>Zona <span class="req">*</span></label>
+      <select id="zona"><option value="">Cargando zonas…</option></select>
+    </div>
+    <div class="field">
+      <label>DNI / CE del promotor <span class="req">*</span></label>
+      <input type="text" id="dni" placeholder="Ej: 45386467" inputmode="numeric" maxlength="12" oninput="onDniInput()">
+      <div class="lookup-box" id="dni-box"></div>
+    </div>
+  </div>
+
+  <div class="section-label">02 — Equipo</div>
+  <div class="card">
+    <div class="field">
+      <label>IMEI <span class="req">*</span></label>
+      <input type="text" id="imei" placeholder="Ej: 868375079930290" inputmode="numeric" maxlength="17" oninput="onImeiInput()">
+      <div class="lookup-box" id="imei-box"></div>
+    </div>
+    <div class="field">
+      <label>Número de línea <span class="req">*</span></label>
+      <input type="text" id="linea" placeholder="9 dígitos" inputmode="numeric" maxlength="9">
+      <div class="hint">Debe contener exactamente 9 números.</div>
+    </div>
+    <div class="field">
+      <label>Tipo de uso <span class="req">*</span></label>
+      <select id="tipoUso"><option value="">Cargando…</option></select>
+    </div>
+    <div class="field">
+      <label>Estado <span class="req">*</span></label>
+      <select id="estado"><option value="">Cargando…</option></select>
+    </div>
+  </div>
+
+  <div class="section-label">03 — Observación</div>
+  <div class="card">
+    <div class="field">
+      <label>Observación (opcional)</label>
+      <textarea id="observacion" placeholder="Comentario adicional…"></textarea>
+    </div>
+  </div>
+
+  <div class="submit-bar">
+    <button class="btn-clear" onclick="clearAll()">✕ Limpiar</button>
+    <button class="btn-submit" id="btn-submit" onclick="openConfirmModal()">Revisar y enviar →</button>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-header-icon">🔍</div>
+      <div>
+        <h3>Verificá los datos antes de enviar</h3>
+        <p>Revisá que todo esté correcto</p>
+      </div>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeConfirmModal()">← Volver</button>
+      <button class="btn-modal-confirm" id="btn-modal-confirm" onclick="confirmAndSend()">✓ Confirmar y enviar</button>
+    </div>
+  </div>
+</div>
+
+<div class="success-screen" id="success-screen">
+  <div class="success-icon">✅</div>
+  <h2>¡Registro enviado!</h2>
+  <p id="success-detail">Los datos fueron guardados en formulario_super.</p>
+  <button class="btn-new" onclick="resetAll()">Cargar otro registro</button>
+</div>
+
+<script>
+/* ======================================================================
+   CONFIGURACIÓN — reemplazá esto por la URL de tu Web App de Apps Script
+   (Implementar → Nueva implementación → Aplicación web → copiar el link
+   que termina en /exec)
+   ====================================================================== */
+const API_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT/exec';
+/* ====================================================================== */
+
+document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+if (!API_URL || API_URL.indexOf('PEGA_AQUI') !== -1) {
+  document.getElementById('config-banner').classList.add('show');
+}
+
+let promotorData = null;
+let imeiData = null;
+let dniTimer = null;
+let imeiTimer = null;
+
+// ---------- Carga inicial ----------
+fetch(API_URL + '?action=init')
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) { showError({message: data.error}); return; }
+    fillSelect('zona', data.zonas, '— Seleccioná zona —');
+    fillSelect('tipoUso', data.tiposUso, '— Seleccioná —');
+    fillSelect('estado', data.estados, '— Seleccioná —');
+  })
+  .catch(err => showError({message: 'No se pudo conectar con la API: ' + err.message}));
+
+function fillSelect(id, values, placeholder) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '';
+  const opt0 = document.createElement('option');
+  opt0.value = ''; opt0.textContent = placeholder;
+  sel.appendChild(opt0);
+  values.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  });
+}
+
+// ---------- Búsqueda DNI ----------
+function onDniInput() {
+  promotorData = null;
+  const box = document.getElementById('dni-box');
+  const val = document.getElementById('dni').value.trim();
+  clearTimeout(dniTimer);
+  if (!val) { box.className = 'lookup-box'; return; }
+  box.className = 'lookup-box loading show';
+  box.innerHTML = '<div class="spinner"></div> Buscando promotor…';
+  dniTimer = setTimeout(() => {
+    fetch(API_URL + '?action=promotor&dni=' + encodeURIComponent(val))
+      .then(r => r.json())
+      .then(res => {
+        if (res.encontrado) {
+          promotorData = res;
+          box.className = 'lookup-box ok show';
+          box.innerHTML = '✓ ' + res.nombre + ' ' + res.apellido +
+            '<div class="lookup-sub">Supervisor: ' + (res.supervisor || '—') + ' · Zona en registro: ' + (res.zona || '—') + '</div>';
+        } else {
+          promotorData = null;
+          box.className = 'lookup-box notfound show';
+          box.innerHTML = '✕ No se encontró un promotor con ese DNI/CE en la hoja "cv".';
+        }
+      })
+      .catch(err => showError({message: 'Error buscando promotor: ' + err.message}));
+  }, 400);
+}
+
+// ---------- Búsqueda IMEI ----------
+function onImeiInput() {
+  imeiData = null;
+  const box = document.getElementById('imei-box');
+  const val = document.getElementById('imei').value.trim();
+  clearTimeout(imeiTimer);
+  if (!val) { box.className = 'lookup-box'; return; }
+  box.className = 'lookup-box loading show';
+  box.innerHTML = '<div class="spinner"></div> Buscando IMEI…';
+  imeiTimer = setTimeout(() => {
+    fetch(API_URL + '?action=imei&imei=' + encodeURIComponent(val))
+      .then(r => r.json())
+      .then(res => {
+        if (res.encontrado) {
+          imeiData = res;
+          box.className = 'lookup-box ok show';
+          box.innerHTML = '✓ ' + res.marca + ' ' + res.modelo +
+            '<div class="lookup-sub">Cuenta: ' + (res.cuenta || '—') + ' · Hoja: ' + res.hoja + '</div>';
+        } else {
+          imeiData = null;
+          box.className = 'lookup-box notfound show';
+          box.innerHTML = '✕ IMEI no encontrado en Stock_grpA / Stock_grpB / Stock_inv.';
+        }
+      })
+      .catch(err => showError({message: 'Error buscando IMEI: ' + err.message}));
+  }, 400);
+}
+
+function showError(err) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = (err && err.message) ? err.message : String(err);
+  banner.className = 'error-banner show';
+  window.scrollTo({top: 0, behavior: 'smooth'});
+  resetSubmitButtons();
+}
+
+function clearErrors() {
+  document.getElementById('error-banner').className = 'error-banner';
+}
+
+// ---------- Validación ----------
+function validate() {
+  clearErrors();
+  const errors = [];
+  const zona = document.getElementById('zona').value;
+  const dni = document.getElementById('dni').value.trim();
+  const imei = document.getElementById('imei').value.trim();
+  const linea = document.getElementById('linea').value.trim();
+  const tipoUso = document.getElementById('tipoUso').value;
+  const estado = document.getElementById('estado').value;
+
+  if (!zona) errors.push('Seleccioná una zona.');
+  if (!dni) errors.push('Ingresá el DNI/CE del promotor.');
+  else if (!promotorData) errors.push('El DNI/CE ingresado no coincide con ningún promotor.');
+  if (!imei) errors.push('Ingresá el IMEI.');
+  else if (!imeiData) errors.push('El IMEI ingresado no fue encontrado en stock.');
+  if (!/^\d{9}$/.test(linea)) errors.push('El número de línea debe tener exactamente 9 dígitos.');
+  if (!tipoUso) errors.push('Seleccioná el tipo de uso.');
+  if (!estado) errors.push('Seleccioná el estado.');
+
+  if (errors.length) {
+    const banner = document.getElementById('error-banner');
+    banner.innerHTML = errors.map(e => '• ' + e).join('<br>');
+    banner.className = 'error-banner show';
+    window.scrollTo({top: 0, behavior: 'smooth'});
+    return null;
+  }
+
+  return {
+    zona: zona,
+    dni: dni,
+    promotor: promotorData.nombre + ' ' + promotorData.apellido,
+    supervisor: promotorData.supervisor,
+    imei: imei,
+    modelo: imeiData.modelo,
+    cuenta: imeiData.cuenta,
+    linea: linea,
+    tipoUso: tipoUso,
+    estado: estado,
+    observacion: document.getElementById('observacion').value.trim()
+  };
+}
+
+// ---------- Modal de confirmación ----------
+let pendingPayload = null;
+
+function openConfirmModal() {
+  const payload = validate();
+  if (!payload) return;
+  pendingPayload = payload;
+
+  const rows = [
+    ['Zona', payload.zona],
+    ['Promotor', payload.promotor],
+    ['DNI/CE', payload.dni],
+    ['IMEI', payload.imei],
+    ['Modelo', payload.modelo],
+    ['Línea', payload.linea],
+    ['Tipo de uso', payload.tipoUso],
+    ['Estado', payload.estado],
+    ['Observación', payload.observacion || '—']
+  ];
+  document.getElementById('modal-body').innerHTML = rows.map(r =>
+    '<div class="confirm-row"><span class="k">' + r[0] + '</span><span class="v">' + r[1] + '</span></div>'
+  ).join('');
+
+  const btn = document.getElementById('btn-modal-confirm');
+  btn.disabled = false;
+  btn.textContent = '✓ Confirmar y enviar';
+  document.getElementById('confirm-modal').classList.add('show');
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirm-modal').classList.remove('show');
+}
+
+document.getElementById('confirm-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirmModal();
+});
+
+function confirmAndSend() {
+  const btn = document.getElementById('btn-modal-confirm');
+  btn.disabled = true;
+  btn.textContent = 'Enviando…';
+
+  fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita el preflight CORS
+    body: JSON.stringify(pendingPayload)
+  })
+    .then(r => r.json())
+    .then(res => {
+      if (res.error) throw new Error(res.error);
+      closeConfirmModal();
+      showSuccess();
+    })
+    .catch(err => {
+      closeConfirmModal();
+      showError({message: err.message});
+    });
+}
+
+function resetSubmitButtons() {
+  const btn = document.getElementById('btn-modal-confirm');
+  if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar y enviar'; }
+}
+
+// ---------- Éxito / reset ----------
+function showSuccess() {
+  document.getElementById('success-detail').textContent =
+    pendingPayload.promotor + ' — ' + pendingPayload.modelo + ' (' + pendingPayload.imei + ') registrado correctamente.';
+  document.getElementById('main-form').style.display = 'none';
+  document.getElementById('success-screen').classList.add('show');
+}
+
+function resetAll() {
+  document.getElementById('main-form').style.display = 'block';
+  document.getElementById('success-screen').classList.remove('show');
+  document.getElementById('zona').value = '';
+  document.getElementById('dni').value = '';
+  document.getElementById('imei').value = '';
+  document.getElementById('linea').value = '';
+  document.getElementById('tipoUso').value = '';
+  document.getElementById('estado').value = '';
+  document.getElementById('observacion').value = '';
+  document.getElementById('dni-box').className = 'lookup-box';
+  document.getElementById('imei-box').className = 'lookup-box';
+  clearErrors();
+  promotorData = null;
+  imeiData = null;
+  pendingPayload = null;
+}
+
+function clearAll() {
+  if (!confirm('¿Limpiar todos los campos?')) return;
+  resetAll();
+}
+</script>
+</body>
+</html>
