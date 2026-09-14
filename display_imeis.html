@@ -215,6 +215,12 @@ input:disabled, select:disabled { opacity: 0.6; }
       <input type="text" id="dni" placeholder="Ej: 45386467" inputmode="numeric" maxlength="12" oninput="onDniInput()">
       <div class="lookup-box" id="dni-box"></div>
     </div>
+    <div class="field" id="pos-field" style="display:none">
+      <label>Cuenta / Ruta asignada <span class="req">*</span></label>
+      <div class="lookup-box ok show" id="pos-auto" style="display:none"></div>
+      <select id="pos-select" style="display:none" onchange="onPosSelectChange()"></select>
+      <div class="hint" id="pos-hint" style="display:none">Este promotor tiene varias cuentas asignadas y sin ruta definida: elegí con cuál está trabajando hoy.</div>
+    </div>
   </div>
 
   <div class="section-label">02 — Equipo</div>
@@ -284,7 +290,7 @@ input:disabled, select:disabled { opacity: 0.6; }
    (Implementar → Nueva implementación → Aplicación web → copiar el link
    que termina en /exec)
    ====================================================================== */
-const API_URL = 'https://script.google.com/macros/s/AKfycbzLSMNd_eY_nV8gZPVDE7ZYJbQmWeOlc5HUJvqlyMTpwyZ-zKG2PkRLWc6djZkAqNO0Mw/exec';
+const API_URL = 'PEGA_AQUI_TU_URL_DE_APPS_SCRIPT/exec';
 /* ====================================================================== */
 
 document.getElementById('topbar-date').textContent = new Date().toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -297,6 +303,7 @@ let promotorData = null;
 let imeiData = null;
 let dniTimer = null;
 let imeiTimer = null;
+let posCuentaSeleccionada = '';
 
 // ---------- Carga inicial ----------
 fetch(API_URL + '?action=init')
@@ -339,15 +346,61 @@ function onDniInput() {
           promotorData = res;
           box.className = 'lookup-box ok show';
           box.innerHTML = '✓ ' + res.nombre + ' ' + res.apellido +
-            '<div class="lookup-sub">Supervisor: ' + (res.supervisor || '—') + ' · Zona en registro: ' + (res.zona || '—') + '</div>';
+            '<div class="lookup-sub">Supervisor: ' + (res.supervisor || '—') +
+            ' · Depto: ' + (res.departamento || '—') + ' · Ciudad: ' + (res.ciudad || '—') + '</div>';
+          renderPosField(res);
         } else {
           promotorData = null;
           box.className = 'lookup-box notfound show';
           box.innerHTML = '✕ No se encontró un promotor con ese DNI/CE en la hoja "cv".';
+          hidePosField();
         }
       })
       .catch(err => showError({message: 'Error buscando promotor: ' + err.message}));
   }, 400);
+}
+
+// ---------- Campo Cuenta / Ruta (POS) ----------
+function renderPosField(res) {
+  const field = document.getElementById('pos-field');
+  const auto = document.getElementById('pos-auto');
+  const select = document.getElementById('pos-select');
+  const hint = document.getElementById('pos-hint');
+
+  field.style.display = 'block';
+
+  if (res.posModo === 'unico') {
+    posCuentaSeleccionada = res.posValor;
+    auto.style.display = 'flex';
+    select.style.display = 'none';
+    hint.style.display = 'none';
+    auto.innerHTML = '✓ POS: ' + (res.posValor || '—');
+  } else if (res.posModo === 'ruta') {
+    posCuentaSeleccionada = res.posValor;
+    auto.style.display = 'flex';
+    select.style.display = 'none';
+    hint.style.display = 'none';
+    auto.innerHTML = '✓ Ruta: ' + (res.posValor || '—');
+  } else if (res.posModo === 'elegir') {
+    posCuentaSeleccionada = '';
+    auto.style.display = 'none';
+    hint.style.display = 'block';
+    select.style.display = 'block';
+    select.innerHTML = '<option value="">— Seleccioná cuenta —</option>' +
+      (res.posOpciones || []).map(o => '<option value="' + o + '">' + o + '</option>').join('');
+  }
+}
+
+function hidePosField() {
+  document.getElementById('pos-field').style.display = 'none';
+  document.getElementById('pos-auto').style.display = 'none';
+  document.getElementById('pos-select').style.display = 'none';
+  document.getElementById('pos-hint').style.display = 'none';
+  posCuentaSeleccionada = '';
+}
+
+function onPosSelectChange() {
+  posCuentaSeleccionada = document.getElementById('pos-select').value;
 }
 
 // ---------- Búsqueda IMEI ----------
@@ -365,9 +418,10 @@ function onImeiInput() {
       .then(res => {
         if (res.encontrado) {
           imeiData = res;
+          const montoTxt = (res.monto === null || res.monto === undefined || isNaN(res.monto)) ? '—' : 'S/ ' + res.monto.toFixed(2);
           box.className = 'lookup-box ok show';
           box.innerHTML = '✓ ' + res.marca + ' ' + res.modelo +
-            '<div class="lookup-sub">Cuenta: ' + (res.cuenta || '—') + ' · Hoja: ' + res.hoja + '</div>';
+            '<div class="lookup-sub">Cuenta: ' + (res.cuenta || '—') + ' · Monto: ' + montoTxt + ' · Hoja: ' + res.hoja + '</div>';
         } else {
           imeiData = null;
           box.className = 'lookup-box notfound show';
@@ -404,6 +458,7 @@ function validate() {
   if (!zona) errors.push('Seleccioná una zona.');
   if (!dni) errors.push('Ingresá el DNI/CE del promotor.');
   else if (!promotorData) errors.push('El DNI/CE ingresado no coincide con ningún promotor.');
+  else if (promotorData.posModo === 'elegir' && !posCuentaSeleccionada) errors.push('Elegí la cuenta/ruta del promotor.');
   if (!imei) errors.push('Ingresá el IMEI.');
   else if (!imeiData) errors.push('El IMEI ingresado no fue encontrado en stock.');
   if (!/^\d{9}$/.test(linea)) errors.push('El número de línea debe tener exactamente 9 dígitos.');
@@ -423,9 +478,13 @@ function validate() {
     dni: dni,
     promotor: promotorData.nombre + ' ' + promotorData.apellido,
     supervisor: promotorData.supervisor,
+    departamento: promotorData.departamento,
+    ciudad: promotorData.ciudad,
+    posCuenta: posCuentaSeleccionada,
     imei: imei,
     modelo: imeiData.modelo,
     cuenta: imeiData.cuenta,
+    monto: (imeiData.monto === null || imeiData.monto === undefined) ? null : imeiData.monto,
     linea: linea,
     tipoUso: tipoUso,
     estado: estado,
@@ -441,12 +500,17 @@ function openConfirmModal() {
   if (!payload) return;
   pendingPayload = payload;
 
+  const montoTxt = (payload.monto === null || payload.monto === undefined) ? '—' : 'S/ ' + Number(payload.monto).toFixed(2);
   const rows = [
     ['Zona', payload.zona],
     ['Promotor', payload.promotor],
     ['DNI/CE', payload.dni],
+    ['Departamento', payload.departamento || '—'],
+    ['Ciudad', payload.ciudad || '—'],
+    ['Cuenta/Ruta', payload.posCuenta || '—'],
     ['IMEI', payload.imei],
     ['Modelo', payload.modelo],
+    ['Monto S/', montoTxt],
     ['Línea', payload.linea],
     ['Tipo de uso', payload.tipoUso],
     ['Estado', payload.estado],
@@ -517,6 +581,7 @@ function resetAll() {
   document.getElementById('observacion').value = '';
   document.getElementById('dni-box').className = 'lookup-box';
   document.getElementById('imei-box').className = 'lookup-box';
+  hidePosField();
   clearErrors();
   promotorData = null;
   imeiData = null;
